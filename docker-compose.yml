@@ -50,6 +50,13 @@ services:
     environment:
       - FLASK_ENV=production
       - TF_CPP_MIN_LOG_LEVEL=2
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     networks:
       - fall-detection
     healthcheck:
@@ -110,6 +117,13 @@ services:
     environment:
       - FLASK_ENV=production
       - TF_CPP_MIN_LOG_LEVEL=2
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     networks:
       - fall-detection
     healthcheck:

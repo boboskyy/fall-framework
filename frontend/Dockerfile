@@ -7,7 +7,7 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 COPY package.json ./
-RUN npm install --production --ignore-scripts && \
+RUN npm install --omit=dev --ignore-scripts && \
     npm rebuild sharp
 
 COPY --chown=nextjs:nodejs .next/standalone/frontend/server.js ./
