@@ -1,0 +1,72 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "dzungvpham_twostream_cnn",
+    "display_name": "Two-Stream CNN Fall Detection (MHI + RGB)",
+    "version": "1.0.0",
+    "description": "Fall detection using a two-stream CNN that fuses spatial (cropped RGB) and temporal (Motion History Image) streams through dual MobileNetV2 backbones with binary sigmoid classification.",
+    "github_url": "https://github.com/dzungvpham/fall-detection-two-stream-cnn",
+    "repository": "https://github.com/dzungvpham/fall-detection-two-stream-cnn",
+    "category": "hybrid",
+    "tags": [
+        "Two-Stream CNN",
+        "MobileNetV2",
+        "TensorFlow",
+        "Optical Flow"
+    ],
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": false,
+    "requires_gpu": false,
+    "port": 3001,
+    "internal_port": 5000,
+    "docker_service_name": "dzungvpham-twostream",
+    "docker": {
+        "context": "../..",
+        "dockerfile": "detectors/dzungvpham_twostream_cnn/Dockerfile"
+    },
+    "download": {
+        "archive_name": "dzungvpham_twostream_cnn.tar.gz",
+        "size_mb": 41.7,
+        "sha256": "e4a7b32e99d725c0b11761ec259f8a5717da14a938305b37524c17060d7fc717",
+        "extract_to": "repo"
+    },
+    "model_info": {
+        "architecture": "Two-stream MobileNetV2 (spatial + temporal) with FC fusion head",
+        "framework": "TensorFlow/Keras",
+        "weights_file": "repo/weights/weights.hdf5",
+        "weights_size_mb": 23.8,
+        "backbone": "MobileNetV2 (ImageNet pretrained, frozen)",
+        "num_classes": 1,
+        "classification": "binary sigmoid (0=no_fall, 1=fall)",
+        "input_size": 224,
+        "training_dataset": "FDD (Fall Detection Dataset)",
+        "temporal_method": "Motion History Image (MHI, 1500ms duration)"
+    },
+    "outputs": {
+        "provides_keypoints": false,
+        "keypoint_format": null,
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_absolute (motion-based, not person-specific)",
+        "provides_activity_label": true,
+        "activity_labels": [
+            "falling",
+            "not_falling"
+        ],
+        "provides_tracking_id": false
+    },
+    "config_schema": {
+        "confidence_threshold": {
+            "type": "number",
+            "default": 0.5,
+            "min": 0.1,
+            "max": 1.0,
+            "description": "Sigmoid threshold for fall classification"
+        }
+    },
+    "gpu_support": {
+        "capable": true,
+        "notes": "TensorFlow MobileNetV2 CNN inference benefits from GPU"
+    },
+    "startup_time_seconds": 45
+}

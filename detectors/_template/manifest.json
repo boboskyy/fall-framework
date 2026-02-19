@@ -1,0 +1,63 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "{{DETECTOR_NAME}}",
+    "display_name": "{{DISPLAY_NAME}}",
+    "version": "1.0.0",
+    "description": "TODO: Describe what this detector does and how it works.",
+    "github_url": "",
+    "category": "{{CATEGORY}}",
+    "tags": ["TODO: e.g. YOLOv8", "LSTM", "Rule-Based"],
+    "supported_input_types": ["{{INPUT_TYPE}}"],
+    "multi_person": false,
+    "requires_gpu": false,
+    "port": {{PORT}},
+    "internal_port": 5000,
+    "docker_service_name": "{{SERVICE_NAME}}",
+
+    "docker": {
+        "context": "../..",
+        "dockerfile": "detectors/{{DETECTOR_NAME}}/Dockerfile"
+    },
+
+    "model_info": {
+        "architecture": "TODO: e.g. YOLOv8, MobileNet, LSTM, etc.",
+        "framework": "TODO: e.g. PyTorch, TensorFlow/Keras, MediaPipe",
+        "weights_file": "TODO: e.g. repo/weights/model.pt",
+        "weights_size_mb": 0,
+        "training_dataset": "TODO: e.g. COCO, custom dataset"
+    },
+
+    "outputs": {
+        "provides_keypoints": false,
+        "keypoint_format": null,
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_absolute",
+        "provides_activity_label": true,
+        "activity_labels": ["falling", "not_falling"],
+        "provides_tracking_id": false
+    },
+
+    "config_schema": {
+        "confidence_threshold": {
+            "type": "number",
+            "default": 0.5,
+            "min": 0.1,
+            "max": 1.0,
+            "description": "Minimum confidence for fall detections"
+        },
+        "frame_skip": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 30,
+            "description": "Process every Nth frame (1 = all frames)"
+        }
+    },
+
+    "gpu_support": {
+        "capable": true,
+        "notes": "TODO: Describe GPU benefit, e.g. 'PyTorch CUDA inference' or set capable to false"
+    },
+
+    "startup_time_seconds": 20
+}

@@ -1,0 +1,8 @@
+flask==3.0.*
+werkzeug==3.0.*
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+# TODO: Add your detector's dependencies below.
+# Note: torch and torchvision are installed separately in the Dockerfile
+# with CPU-only wheels. If your detector uses TensorFlow instead,
+# remove the torch lines from the Dockerfile and add tensorflow here.

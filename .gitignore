@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker
+.dockerignore
+
+# Detector repos (cloned externally)
+detectors/*/repo/
+
+# Download markers (per-machine state)
+detectors/*/.download_complete
+
+# Detector model weights in non-repo dirs (e.g. boboskyy)
+detectors/*/models/
+
+# Packed archives
+archives/
+
+# Model weights (large files)
+*.pt
+*.pth
+*.h5
+*.hdf5
+*.pb
+*.onnx
+*.weights
+
+# Shared volume contents
+shared/uploads/*
+shared/outputs/*
+shared/temp/*
+shared/state/*
+!shared/uploads/.gitkeep
+!shared/outputs/.gitkeep
+!shared/temp/.gitkeep
+!shared/state/.gitkeep
+
+# Test videos
+tests/test_videos/*
+!tests/test_videos/.gitkeep
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

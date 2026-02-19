@@ -1,0 +1,15 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/batch/page": "/batch",
+  "/compare/[id]/page": "/compare/[id]",
+  "/compare/page": "/compare",
+  "/detect/page": "/detect",
+  "/detectors/[name]/page": "/detectors/[name]",
+  "/detectors/page": "/detectors",
+  "/files/page": "/files",
+  "/jobs/[id]/page": "/jobs/[id]",
+  "/jobs/page": "/jobs",
+  "/page": "/",
+  "/template/page": "/template"
+}

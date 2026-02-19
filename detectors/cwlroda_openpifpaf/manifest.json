@@ -1,0 +1,65 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "cwlroda_openpifpaf",
+    "display_name": "Fall Detection using OpenPifPaf (cwlroda)",
+    "version": "1.0.0",
+    "description": "Multi-person fall detection using OpenPifPaf 0.11.8 pose estimation with centroid tracking and rule-based fall classification. Detects falls when bounding box becomes wider than 1.2x its height combined with significant centroid displacement.",
+    "github_url": "https://github.com/cwlroda/falldetection_openpifpaf",
+    "category": "pose_estimation",
+    "tags": [
+        "OpenPifPaf",
+        "Centroid Tracking",
+        "Rule-Based"
+    ],
+    "port": 3003,
+    "internal_port": 5000,
+    "docker_service_name": "cwlroda-openpifpaf",
+    "download": {
+        "archive_name": "cwlroda_openpifpaf.tar.gz",
+        "size_mb": 64.3,
+        "sha256": "91682e30904c4f51f2e05c94e2633a67656e10e0e8d200ac69f6a3825657a2e8",
+        "extract_to": "repo"
+    },
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": true,
+    "requires_gpu": false,
+    "model_info": {
+        "architecture": "OpenPifPaf 0.11.8 (ShuffleNetV2K16W backbone) + rule-based fall detection",
+        "framework": "PyTorch",
+        "weights_file": "auto-downloaded shufflenetv2k16w checkpoint (~5.5MB)",
+        "training_dataset": "COCO Keypoints (for pose); rule-based fall detection (no training needed)"
+    },
+    "outputs": {
+        "provides_keypoints": true,
+        "keypoint_format": "coco_17",
+        "provides_bounding_box": true,
+        "provides_activity_label": true,
+        "activity_labels": [
+            "falling",
+            "normal"
+        ]
+    },
+    "config_schema": {
+        "scale": {
+            "type": "number",
+            "default": 1.0,
+            "min": 0.1,
+            "max": 2.0,
+            "description": "Input image scale factor for preprocessing"
+        },
+        "frame_skip": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 30,
+            "description": "Process every Nth frame (1 = all frames)"
+        }
+    },
+    "gpu_support": {
+        "capable": true,
+        "notes": "OpenPifPaf 0.11.8 pose estimation benefits from GPU via PyTorch CUDA"
+    },
+    "startup_time_seconds": 30
+}

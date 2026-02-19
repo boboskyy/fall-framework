@@ -1,0 +1,7 @@
+flask==3.0.*
+werkzeug==3.0.*
+# Detector-specific dependencies
+# Note: TensorFlow is installed in the Dockerfile (cpu or gpu variant via DEVICE build arg)
+mediapipe==0.10.21
+opencv-python-headless>=4.8.0
+numpy>=1.24.0,<2.0

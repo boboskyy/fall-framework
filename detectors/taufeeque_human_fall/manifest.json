@@ -1,0 +1,82 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "taufeeque_human_fall",
+    "display_name": "OpenPifPaf + LSTM Fall Detection (Taufeeque)",
+    "version": "1.0.0",
+    "description": "Multi-person fall detection using OpenPifPaf pose estimation (17 COCO keypoints) with inverted pendulum physics model and LSTM temporal classification. Extracts 5 physics-based features (bbox ratio, log angle, rotational energy, ratio derivative, generalized force) from a 5-point body model and classifies into 7 activity categories with false positive detection heuristic.",
+    "github_url": "https://github.com/taufeeque9/HumanFallDetection",
+    "repository": "https://github.com/taufeeque9/HumanFallDetection",
+    "category": "pose_estimation",
+    "tags": [
+        "OpenPifPaf",
+        "LSTM",
+        "Physics Model"
+    ],
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": true,
+    "requires_gpu": false,
+    "port": 3002,
+    "internal_port": 5000,
+    "docker_service_name": "taufeeque-openpifpaf",
+    "docker": {
+        "context": "../..",
+        "dockerfile": "detectors/taufeeque_human_fall/Dockerfile"
+    },
+    "download": {
+        "archive_name": "taufeeque_human_fall.tar.gz",
+        "size_mb": 2.3,
+        "sha256": "15c801de5201359ef310e925326fa34638f203c432d371521a6e544e8d56b228",
+        "extract_to": "repo"
+    },
+    "model_info": {
+        "architecture": "OpenPifPaf (ShuffleNetV2K16) + LSTM (48 hidden, 2 layers, 7 classes)",
+        "framework": "PyTorch",
+        "weights_file": "model/lstm_weights.sav",
+        "pose_model": "shufflenetv2k16w (auto-downloaded by OpenPifPaf)",
+        "training_dataset": "Custom fall detection dataset (7 activity classes)"
+    },
+    "outputs": {
+        "provides_keypoints": true,
+        "keypoint_format": "coco_17",
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_absolute",
+        "provides_activity_label": true,
+        "activity_labels": [
+            "FALL",
+            "Normal",
+            "FALL Warning"
+        ]
+    },
+    "config_schema": {
+        "resolution": {
+            "type": "number",
+            "default": 0.4,
+            "description": "Resolution prescale factor from input dimensions"
+        },
+        "consecutive_frames": {
+            "type": "integer",
+            "default": 36,
+            "description": "Number of consecutive frames for person tracking history window"
+        },
+        "frame_skip": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 30,
+            "description": "Process every Nth frame (1 = every frame)"
+        }
+    },
+    "resource_profile": {
+        "ram_mb": 2048,
+        "gpu_vram_mb": 0,
+        "cpu_cores": 2
+    },
+    "gpu_support": {
+        "capable": true,
+        "notes": "OpenPifPaf pose estimation + LSTM inference benefit from GPU via PyTorch CUDA"
+    },
+    "startup_time_seconds": 45,
+    "timeout_seconds": 600
+}

@@ -1,0 +1,15 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/batch/page": "app/batch/page.js",
+  "/compare/[id]/page": "app/compare/[id]/page.js",
+  "/compare/page": "app/compare/page.js",
+  "/detect/page": "app/detect/page.js",
+  "/detectors/[name]/page": "app/detectors/[name]/page.js",
+  "/detectors/page": "app/detectors/page.js",
+  "/files/page": "app/files/page.js",
+  "/jobs/[id]/page": "app/jobs/[id]/page.js",
+  "/jobs/page": "app/jobs/page.js",
+  "/page": "app/page.js",
+  "/template/page": "app/template/page.js"
+}

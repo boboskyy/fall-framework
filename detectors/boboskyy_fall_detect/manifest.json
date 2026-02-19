@@ -1,0 +1,102 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "boboskyy_fall_detect",
+    "display_name": "MediaPipe + LSTM Fall Detection (Boboskyy)",
+    "version": "1.0.0",
+    "description": "Fall detection using MediaPipe 33-point pose estimation with hip-center normalization and 2-layer LSTM temporal classifier. Trained on UR Fall Detection Dataset. Binary classification (ADL vs FALL) on 30-frame sliding windows with softmax threshold.",
+    "github_url": "",
+    "category": "pose_estimation",
+    "tags": [
+        "MediaPipe",
+        "LSTM",
+        "Sliding Window"
+    ],
+    "port": 3004,
+    "internal_port": 5000,
+    "docker_service_name": "boboskyy-lstm",
+    "download": {
+        "archive_name": "boboskyy_fall_detect.tar.gz",
+        "size_mb": 2.9,
+        "sha256": "df111025c3e8fb50ca5e9391362870f54e72efc92cf2f2bf2cdb25b60c89ac45",
+        "extract_to": "."
+    },
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": false,
+    "requires_gpu": false,
+    "model_info": {
+        "architecture": "LSTM(192->24) + BatchNorm + Dropout + Dense(48->2 softmax)",
+        "framework": "TensorFlow/Keras",
+        "pose_estimator": "MediaPipe Pose (model_complexity=1)",
+        "weights_file": "best_model.keras",
+        "parameters": "~272,498",
+        "training_dataset": "UR Fall Detection Dataset (30 falls + 40 ADL videos)",
+        "input_features": "33 MediaPipe landmarks x 4 (x, y, z, visibility) = 132 features per frame",
+        "window_size": 30,
+        "output_classes": [
+            "ADL",
+            "FALL"
+        ]
+    },
+    "outputs": {
+        "provides_keypoints": true,
+        "keypoint_format": "mediapipe_33",
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_absolute (derived from landmark extremes)",
+        "provides_activity_label": true,
+        "activity_labels": [
+            "adl",
+            "fall"
+        ]
+    },
+    "config_schema": {
+        "threshold": {
+            "type": "number",
+            "default": 0.7,
+            "min": 0.0,
+            "max": 1.0,
+            "description": "Fall probability threshold for softmax output"
+        },
+        "window_size": {
+            "type": "integer",
+            "default": 30,
+            "min": 10,
+            "max": 120,
+            "description": "Frames per sliding window (must match model training, default 30)"
+        },
+        "frame_skip": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 30,
+            "description": "Process every Nth frame (1 = all frames)"
+        },
+        "model_complexity": {
+            "type": "integer",
+            "default": 1,
+            "min": 0,
+            "max": 2,
+            "description": "MediaPipe Pose model complexity (0=lite, 1=full, 2=heavy)"
+        },
+        "min_detection_confidence": {
+            "type": "number",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "description": "MediaPipe minimum detection confidence"
+        },
+        "min_tracking_confidence": {
+            "type": "number",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "description": "MediaPipe minimum tracking confidence"
+        }
+    },
+    "gpu_support": {
+        "capable": true,
+        "notes": "TensorFlow LSTM inference benefits from GPU; MediaPipe pose is CPU-only"
+    },
+    "startup_time_seconds": 20
+}

@@ -1,0 +1,10 @@
+node_modules/
+.next/dev/
+.next/cache/
+.next/build/
+.next/server/
+.next/diagnostics/
+.next/trace*
+.next/turbopack/
+.next/types/
+.env*.local

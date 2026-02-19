@@ -1,0 +1,132 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    ports:
+      - "3000:5000"
+    volumes:
+      - ./shared:/shared
+      - ./detectors:/detectors
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/project:ro
+    environment:
+      - FLASK_ENV=production
+      - FALLFW_REPO_URL=https://github.com/boboskyy/fall-detector-repos/releases/download/v1.0/
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "2999:3000"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  dzungvpham-twostream:
+    build:
+      context: .
+      dockerfile: detectors/dzungvpham_twostream_cnn/Dockerfile
+    ports:
+      - "3001:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+      - TF_CPP_MIN_LOG_LEVEL=2
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  taufeeque-openpifpaf:
+    build:
+      context: .
+      dockerfile: detectors/taufeeque_human_fall/Dockerfile
+    ports:
+      - "3002:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+      - MPLBACKEND=Agg
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  cwlroda-openpifpaf:
+    build:
+      context: .
+      dockerfile: detectors/cwlroda_openpifpaf/Dockerfile
+    ports:
+      - "3003:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+      - MPLBACKEND=Agg
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  boboskyy-lstm:
+    build:
+      context: .
+      dockerfile: detectors/boboskyy_fall_detect/Dockerfile
+    ports:
+      - "3004:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+      - TF_CPP_MIN_LOG_LEVEL=2
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  shared:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./shared
+
+networks:
+  fall-detection:
+    driver: bridge
