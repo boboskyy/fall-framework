@@ -237,6 +237,7 @@ def create_gateway_app():
 
     @app.route('/api/v1/health', methods=['GET'])
     def gateway_health():
+        registry.refresh_all_health()
         detectors = registry.get_all_detectors()
 
         healthy_count = sum(1 for d in detectors if d.container_status == 'healthy')

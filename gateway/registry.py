@@ -3,6 +3,7 @@ import os
 import json
 import requests
 import docker
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -197,8 +198,11 @@ class DetectorRegistry:
             }
 
     def refresh_all_health(self):
-        for name in self._detectors.keys():
-            self.check_health(name)
+        names = list(self._detectors.keys())
+        if not names:
+            return
+        with ThreadPoolExecutor(max_workers=len(names)) as pool:
+            pool.map(self.check_health, names)
 
     def get_compatible_detectors(self, input_type: str) -> List[DetectorInfo]:
         compatible = []
