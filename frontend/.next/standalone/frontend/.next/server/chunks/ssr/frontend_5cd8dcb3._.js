@@ -1,0 +1,3 @@
+module.exports=[52485,a=>{"use strict";var b=a.i(57850),c=a.i(13916);function d({className:a,...d}){return(0,b.jsx)("div",{className:(0,c.cn)("animate-pulse rounded-md bg-muted",a),...d})}a.s(["Skeleton",()=>d])},21900,a=>{"use strict";let b=(0,a.i(31261).default)("arrow-left",[["path",{d:"m12 19-7-7 7-7",key:"1l729n"}],["path",{d:"M19 12H5",key:"x3x0zl"}]]);a.s(["ArrowLeft",()=>b],21900)}];
+
+//# sourceMappingURL=frontend_5cd8dcb3._.js.map

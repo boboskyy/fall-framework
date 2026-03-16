@@ -1,0 +1,70 @@
+{
+    "name": "tonlongthuat_fall_detection",
+    "display_name": "Tonlongthuat YOLO11n Multi-Activity",
+    "version": "1.0.0",
+    "description": "YOLO11n-based multi-activity detector (fall, sit, sleep, standing, violence) with temporal smoothing",
+    "author": "tonlongthuat",
+    "github_url": "https://github.com/tonlongthuat/Real-Time-Fall-Detection",
+    "repo_url": "https://github.com/tonlongthuat/Real-Time-Fall-Detection",
+    "paper_url": null,
+    "architecture": "YOLO11n (7-class object detection)",
+    "approach": "appearance",
+    "tags": [
+        "YOLO11",
+        "Multi-Class",
+        "Temporal Smoothing"
+    ],
+    "supported_input_types": [
+        "video",
+        "webcam"
+    ],
+    "multi_person": true,
+    "requires_gpu": false,
+    "framework": "ultralytics",
+    "model_file": "ok.pt",
+    "port": 3007,
+    "internal_port": 5000,
+    "docker_service_name": "tonlongthuat-yolo11",
+    "download": {
+        "archive_name": "tonlongthuat_fall_detection.tar.gz",
+        "size_mb": 225.0,
+        "sha256": "ca38b57e63c57c3d955b8be8c38eb82c7ab7b2e10de414f0d8564825e781dce4",
+        "extract_to": "repo"
+    },
+    "config_schema": {
+        "confidence_threshold": {
+            "type": "float",
+            "default": 0.6,
+            "min": 0.0,
+            "max": 1.0,
+            "description": "Minimum confidence threshold for detections"
+        },
+        "smoothing_window_sec": {
+            "type": "float",
+            "default": 10.0,
+            "min": 1.0,
+            "max": 60.0,
+            "description": "Maximum time window for fall time accumulation (seconds)"
+        },
+        "fall_time_threshold_sec": {
+            "type": "float",
+            "default": 3.0,
+            "min": 0.5,
+            "max": 30.0,
+            "description": "Minimum accumulated fall time to trigger fall detection (seconds)"
+        }
+    },
+    "capabilities": {
+        "pose_estimation": false,
+        "tracking": false,
+        "temporal_analysis": true,
+        "multi_class": true
+    },
+    "notes": "Detects 7 activity classes: violence, fall, fire, sit, sleep, standing. Fire detections are filtered out. Uses temporal smoothing with configurable accumulation window.",
+    "gpu_support": {
+        "capable": true,
+        "notes": "YOLO11n inference benefits from GPU via PyTorch CUDA"
+    },
+    "integration_status": "active",
+    "added_date": "2025-01-XX"
+}

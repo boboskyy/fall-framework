@@ -1,0 +1,89 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "yb_class_fall",
+    "display_name": "YOLOv7-Pose Fall Detection (Y-B-Class)",
+    "version": "1.0.0",
+    "description": "Multi-person fall detection using YOLOv7-w6-pose for 17-keypoint estimation with rule-based biomechanical analysis. Detects falls via center-of-mass velocity, vertical displacement, and body aspect-ratio changes over a sliding window.",
+    "github_url": "https://github.com/Y-B-Class-Projects/Human-Fall-Detection",
+    "repository": "https://github.com/Y-B-Class-Projects/Human-Fall-Detection",
+    "category": "pose_estimation",
+    "tags": [
+        "YOLOv7-Pose",
+        "Biomechanics",
+        "Rule-Based"
+    ],
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": true,
+    "requires_gpu": false,
+    "port": 3008,
+    "internal_port": 5000,
+    "docker_service_name": "yb-class-fall",
+    "docker": {
+        "context": "../..",
+        "dockerfile": "detectors/yb_class_fall/Dockerfile"
+    },
+    "download": {
+        "archive_name": "yb_class_fall.tar.gz",
+        "size_mb": 356.0,
+        "sha256": "da7c4e0554a9703fe2642636206b399edcbe7129b0932958950230aa08d69ddd",
+        "extract_to": "repo"
+    },
+    "model_info": {
+        "architecture": "YOLOv7-w6-pose (keypoint estimation) + rule-based fall heuristics",
+        "framework": "PyTorch",
+        "weights_file": "yolov7-w6-pose.pt",
+        "weights_size_mb": 153,
+        "weights_url": "https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-w6-pose.pt",
+        "training_dataset": "COCO Keypoints (pose model); fall heuristics are hand-tuned (no training)"
+    },
+    "outputs": {
+        "provides_keypoints": true,
+        "keypoint_format": "coco_17",
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_letterboxed",
+        "provides_activity_label": true,
+        "activity_labels": [
+            "falling",
+            "not_falling"
+        ],
+        "provides_tracking_id": true,
+        "tracker": "distance-based"
+    },
+    "config_schema": {
+        "window_size": {
+            "type": "integer",
+            "default": 30,
+            "min": 2,
+            "description": "Number of frames in analysis sliding window (min 2)"
+        },
+        "v_thresh": {
+            "type": "number",
+            "default": 60.0,
+            "description": "Center-of-mass velocity threshold for SpeedDrop criterion"
+        },
+        "dy_thresh": {
+            "type": "number",
+            "default": 20.0,
+            "description": "Vertical displacement threshold (pixels)"
+        },
+        "ar_thresh": {
+            "type": "number",
+            "default": 0.35,
+            "description": "Aspect ratio change threshold for DownFlat criterion"
+        },
+        "frame_skip": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 30,
+            "description": "Process every Nth frame (1 = every frame, higher = faster but less accurate)"
+        }
+    },
+    "gpu_support": {
+        "capable": true,
+        "notes": "YOLOv7-w6-pose inference auto-selects GPU when CUDA available"
+    },
+    "startup_time_seconds": 30
+}

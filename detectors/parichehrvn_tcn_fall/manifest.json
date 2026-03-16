@@ -1,0 +1,82 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "parichehrvn_tcn_fall",
+    "display_name": "YOLOv11-Pose + TCN Fall Detection (Parichehrvn)",
+    "version": "1.0.0",
+    "description": "Fall detection using fine-tuned YOLOv11-Pose for 17-keypoint extraction and a Temporal Convolutional Network (TCN) on 15-frame sliding windows for temporal classification (ADL vs Fall).",
+    "github_url": "https://github.com/parichehrvn/fall_detection",
+    "repository": "https://github.com/parichehrvn/fall_detection",
+    "category": "pose_estimation",
+    "tags": [
+        "TCN",
+        "YOLO-Pose",
+        "Temporal"
+    ],
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": false,
+    "requires_gpu": false,
+    "port": 3009,
+    "internal_port": 5000,
+    "docker_service_name": "parichehrvn-tcn",
+    "docker": {
+        "context": "../..",
+        "dockerfile": "detectors/parichehrvn_tcn_fall/Dockerfile"
+    },
+    "download": {
+        "archive_name": "parichehrvn_tcn_fall.tar.gz",
+        "size_mb": 110.0,
+        "sha256": "bbb6ad8452ff8909eb78005f68c4ca265043fa4ea9686670c668ba6d948dab89",
+        "extract_to": "repo"
+    },
+    "model_info": {
+        "architecture": "YOLOv11-Pose (keypoint estimation) + Temporal Convolutional Network (TCN, dilated Conv1d)",
+        "framework": "PyTorch + Ultralytics",
+        "weights_files": [
+            "cfg/models/pose/best_yolov11_pose.pt",
+            "cfg/models/tcn/best_tcn.pt"
+        ],
+        "weights_size_mb": 6.2,
+        "training_dataset": "Custom fall detection dataset (YOLO pose fine-tuned, TCN trained on ADL/Fall keypoint sequences)"
+    },
+    "outputs": {
+        "provides_keypoints": true,
+        "keypoint_format": "coco_17",
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_absolute",
+        "provides_activity_label": true,
+        "activity_labels": [
+            "falling",
+            "not_falling"
+        ]
+    },
+    "config_schema": {
+        "confidence_threshold": {
+            "type": "number",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "description": "Minimum TCN softmax confidence to classify as fall (below this triggers fall_warning)"
+        },
+        "seq_len": {
+            "type": "integer",
+            "default": 15,
+            "min": 5,
+            "max": 60,
+            "description": "Number of frames in TCN sliding window (must match training window size)"
+        },
+        "frame_skip": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 30,
+            "description": "Process every Nth frame (1 = every frame, higher = faster but less accurate)"
+        }
+    },
+    "gpu_support": {
+        "capable": true,
+        "notes": "YOLOv11-Pose + TCN inference benefits from GPU via PyTorch CUDA"
+    },
+    "startup_time_seconds": 30
+}

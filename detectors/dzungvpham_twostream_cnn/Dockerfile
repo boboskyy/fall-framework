@@ -1,8 +1,9 @@
 FROM python:3.10-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 \
-    libglib2.0-0 \
+    libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -30,7 +31,7 @@ COPY detectors/dzungvpham_twostream_cnn/app.py /app/app.py
 RUN python -c "from tensorflow.keras.applications import MobileNetV2; MobileNetV2(weights='imagenet', include_top=False, input_shape=(224,224,3))"
 
 ENV TF_CPP_MIN_LOG_LEVEL=2
+ENV PYTHONPATH="/app"
 
 EXPOSE 5000
-
-CMD ["python", "-m", "flask", "run", "--host=0.0.0.0"]
+CMD ["python", "app.py"]

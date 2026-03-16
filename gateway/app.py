@@ -13,6 +13,8 @@ from gateway.build_manager import BuildManager
 from gateway.download_manager import DownloadManager
 from gateway.file_manager import FileManager
 from gateway.template_engine import get_template_info, generate_template_zip
+from gateway.dataset_manager import DatasetManager
+from gateway.evaluation_manager import EvaluationManager
 
 
 def create_gateway_app():
@@ -27,6 +29,19 @@ def create_gateway_app():
     batch_manager = BatchManager(orchestrator, file_manager)
     build_manager = BuildManager(registry)
     download_manager = DownloadManager(registry)
+
+    import os
+    dataset_registry_url = os.environ.get('FALLFW_DATASET_REGISTRY_URL', '')
+    dataset_manager = DatasetManager(
+        datasets_dir='/datasets',
+        shared_dir='/shared',
+        registry_url=dataset_registry_url,
+    )
+    evaluation_manager = EvaluationManager(
+        dataset_manager=dataset_manager,
+        orchestrator=orchestrator,
+        comparison_engine=comparison_engine,
+    )
 
 
     @app.route('/api/v1/detectors', methods=['GET'])
@@ -66,6 +81,22 @@ def create_gateway_app():
             return jsonify(result), 503
 
         return jsonify(result)
+
+    @app.route('/api/v1/detectors/summary', methods=['GET'])
+    def get_detectors_summary():
+        detectors = registry.get_all_detectors()
+        names = [d.name for d in detectors]
+        return jsonify(evaluation_manager.get_all_detectors_summary(names))
+
+    @app.route('/api/v1/detectors/<name>/stats', methods=['GET'])
+    def get_detector_stats(name):
+        detector = registry.get_detector(name)
+        if not detector:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Detector "{name}" not found',
+            }), 404
+        return jsonify(evaluation_manager.get_detector_stats(name))
 
     @app.route('/api/v1/detectors/<name>/start', methods=['POST'])
     def start_detector(name):
@@ -724,6 +755,251 @@ def create_gateway_app():
         })
 
 
+    # === Dataset Management ===
+
+    @app.route('/api/v1/datasets', methods=['GET'])
+    def list_datasets():
+        datasets = dataset_manager.list_datasets()
+        return jsonify({
+            'datasets': datasets,
+            'count': len(datasets),
+        })
+
+    @app.route('/api/v1/datasets/<name>', methods=['GET'])
+    def get_dataset_info(name):
+        info = dataset_manager.get_dataset_info(name)
+        if not info:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Dataset "{name}" not found',
+            }), 404
+        return jsonify(info)
+
+    @app.route('/api/v1/datasets/<name>/files', methods=['GET'])
+    def get_dataset_files(name):
+        label = request.args.get('label')
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+
+        result = dataset_manager.get_dataset_files(name, label=label,
+                                                   page=page, per_page=per_page)
+        if not result:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Dataset "{name}" not found',
+            }), 404
+        return jsonify(result)
+
+    @app.route('/api/v1/datasets/<name>/download', methods=['POST'])
+    def download_dataset(name):
+        result = dataset_manager.download_dataset(name)
+        if result.get('error') == 'NOT_FOUND':
+            return jsonify(result), 404
+        elif result.get('error') in ('ALREADY_DOWNLOADED', 'ALREADY_DOWNLOADING'):
+            return jsonify(result), 409
+        elif result.get('error'):
+            return jsonify(result), 500
+        return jsonify(result), 202
+
+    @app.route('/api/v1/datasets/<name>/download/status', methods=['GET'])
+    def get_dataset_download_status(name):
+        for dl in dataset_manager._downloads.values():
+            if dl.dataset_name == name:
+                return jsonify(dl.get_summary())
+        return jsonify({
+            'error': 'NOT_FOUND',
+            'message': f'No download found for dataset "{name}"',
+        }), 404
+
+    @app.route('/api/v1/datasets/<name>', methods=['DELETE'])
+    def delete_dataset(name):
+        result = dataset_manager.delete_dataset(name)
+        if result.get('error') == 'NOT_FOUND':
+            return jsonify(result), 404
+        return jsonify(result)
+
+    @app.route('/api/v1/datasets/<name>/copy-to-files', methods=['POST'])
+    def copy_dataset_files_to_uploads(name):
+        data = request.get_json(force=True, silent=True)
+        if not data or not data.get('filenames'):
+            return jsonify({
+                'error': 'MISSING_PARAMETERS',
+                'message': 'Required: filenames (array of file names)',
+            }), 400
+
+        result = dataset_manager.copy_to_uploads(name, data['filenames'])
+        if result.get('error') == 'NOT_FOUND':
+            return jsonify(result), 404
+        return jsonify(result)
+
+    @app.route('/api/v1/datasets/upload', methods=['POST'])
+    def upload_dataset():
+        if 'file' not in request.files:
+            return jsonify({
+                'error': 'MISSING_FILE',
+                'message': 'No file field in request. Use multipart/form-data with a "file" field.',
+            }), 400
+
+        uploaded_file = request.files['file']
+        if not uploaded_file.filename:
+            return jsonify({
+                'error': 'EMPTY_FILENAME',
+                'message': 'No file selected',
+            }), 400
+
+        import tempfile, os
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.zip')
+        os.close(tmp_fd)
+        try:
+            uploaded_file.save(tmp_path)
+            ds_name = request.form.get('name')
+            display_name = request.form.get('display_name')
+            result = dataset_manager.upload_dataset(tmp_path, name=ds_name,
+                                                    display_name=display_name)
+            if result.get('error'):
+                return jsonify(result), 400
+            return jsonify(result), 201
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    @app.route('/api/v1/datasets/refresh-registry', methods=['POST'])
+    def refresh_dataset_registry():
+        result = dataset_manager.refresh_registry()
+        return jsonify(result)
+
+    # === Dataset Labeling ===
+
+    @app.route('/api/v1/datasets/<name>/files/<filename>', methods=['PATCH'])
+    def label_dataset_file(name, filename):
+        data = request.get_json()
+        if not data or 'label' not in data:
+            return jsonify({
+                'error': 'INVALID_REQUEST',
+                'message': 'JSON body with "label" field required',
+            }), 400
+
+        result = dataset_manager.label_file(name, filename, data['label'])
+        if result.get('error') == 'NOT_FOUND':
+            return jsonify(result), 404
+        elif result.get('error'):
+            return jsonify(result), 400
+        return jsonify(result)
+
+    @app.route('/api/v1/datasets/<name>/labels', methods=['POST'])
+    def bulk_label_dataset(name):
+        data = request.get_json()
+        if not data or 'labels' not in data:
+            return jsonify({
+                'error': 'INVALID_REQUEST',
+                'message': 'JSON body with "labels" field required',
+            }), 400
+
+        result = dataset_manager.bulk_label(name, data['labels'])
+        if result.get('error') == 'NOT_FOUND':
+            return jsonify(result), 404
+        elif result.get('error'):
+            return jsonify(result), 400
+        return jsonify(result)
+
+    # === Evaluation ===
+
+    @app.route('/api/v1/evaluate', methods=['POST'])
+    def start_evaluation():
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'error': 'INVALID_REQUEST',
+                'message': 'JSON body required',
+            }), 400
+
+        dataset_name = data.get('dataset_name') or data.get('dataset')
+        detector_names = data.get('detector_names') or data.get('detectors', [])
+
+        if not dataset_name:
+            return jsonify({
+                'error': 'MISSING_PARAMETERS',
+                'message': 'Required: dataset_name',
+            }), 400
+
+        if not detector_names or not isinstance(detector_names, list):
+            return jsonify({
+                'error': 'MISSING_PARAMETERS',
+                'message': 'Required: detector_names (array of detector names)',
+            }), 400
+
+        result = evaluation_manager.create_evaluation(
+            dataset_name=dataset_name,
+            detector_names=detector_names,
+            selected_files=data.get('selected_files'),
+            config=data.get('detector_configs') or data.get('config'),
+            verdict_config=data.get('verdict_config'),
+            sync=data.get('sync', False),
+        )
+
+        if result.get('error'):
+            status_code = 404 if result['error'] == 'NOT_FOUND' else 400
+            return jsonify(result), status_code
+
+        status_code = 200 if data.get('sync', False) else 202
+        return jsonify(result), status_code
+
+    @app.route('/api/v1/evaluate/<eval_id>/status', methods=['GET'])
+    def get_evaluation_status(eval_id):
+        status = evaluation_manager.get_evaluation_status(eval_id)
+        if not status:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Evaluation "{eval_id}" not found',
+            }), 404
+        return jsonify(status)
+
+    @app.route('/api/v1/evaluate/<eval_id>/cancel', methods=['POST'])
+    def cancel_evaluation(eval_id):
+        result = evaluation_manager.cancel_evaluation(eval_id)
+        if 'error' in result:
+            status_code = 404 if result['error'] == 'NOT_FOUND' else 409
+            return jsonify(result), status_code
+        return jsonify(result)
+
+    @app.route('/api/v1/evaluate/<eval_id>/results', methods=['GET'])
+    def get_evaluation_results(eval_id):
+        results = evaluation_manager.get_evaluation_results(eval_id)
+        if not results:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Evaluation "{eval_id}" not found',
+            }), 404
+        return jsonify(results)
+
+    @app.route('/api/v1/evaluate/<eval_id>/export', methods=['GET'])
+    def export_evaluation(eval_id):
+        fmt = request.args.get('format', 'json')
+        result = evaluation_manager.export_results(eval_id, fmt=fmt)
+        if not result:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Evaluation "{eval_id}" not found or not completed',
+            }), 404
+
+        if fmt == 'csv':
+            from flask import Response
+            return Response(
+                result['data'],
+                mimetype='text/csv',
+                headers={'Content-Disposition': f'attachment; filename=evaluation_{eval_id}.csv'},
+            )
+        return jsonify(result['data'])
+
+    @app.route('/api/v1/evaluations', methods=['GET'])
+    def list_evaluations():
+        evaluations = evaluation_manager.list_evaluations()
+        return jsonify({
+            'evaluations': evaluations,
+            'count': len(evaluations),
+        })
+
+
     @app.route('/', methods=['GET'])
     def root():
         return jsonify({
@@ -752,7 +1028,14 @@ def create_gateway_app():
                 'compare': '/api/v1/compare',
                 'comparisons': '/api/v1/comparisons',
                 'batch_detect': '/api/v1/batch/detect',
-                'batches': '/api/v1/batches'
+                'batches': '/api/v1/batches',
+                'datasets': '/api/v1/datasets',
+                'dataset_files': '/api/v1/datasets/{name}/files',
+                'dataset_download': '/api/v1/datasets/{name}/download',
+                'dataset_upload': '/api/v1/datasets/upload',
+                'dataset_labels': '/api/v1/datasets/{name}/labels',
+                'evaluate': '/api/v1/evaluate',
+                'evaluations': '/api/v1/evaluations'
             }
         })
 

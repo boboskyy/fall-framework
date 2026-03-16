@@ -1,0 +1,85 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "barkhaaroraa_fall_detection_dl",
+    "display_name": "MediaPipe Pose Fall Detection (Shoulder Heuristic)",
+    "version": "1.0.0",
+    "description": "Fall detection using MediaPipe Pose estimation (33 landmarks) with a simple shoulder-height-drop heuristic. Detects falls when average shoulder Y-coordinate drops by more than 50% compared to the previous measurement.",
+    "github_url": "https://github.com/barkhaaroraa/health_monitoring_system_DL",
+    "repository": "https://github.com/barkhaaroraa/health_monitoring_system_DL",
+    "category": "pose_estimation",
+    "tags": [
+        "MediaPipe",
+        "Heuristic",
+        "Rule-Based"
+    ],
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": false,
+    "requires_gpu": false,
+    "port": 3006,
+    "internal_port": 5000,
+    "docker_service_name": "barkhaaroraa-mediapipe",
+    "docker": {
+        "context": "../..",
+        "dockerfile": "detectors/barkhaaroraa_fall_detection_dl/Dockerfile"
+    },
+    "download": {
+        "archive_name": "barkhaaroraa_fall_detection_dl.tar.gz",
+        "size_mb": 1.0,
+        "sha256": "ec1df59919059a9b521e575f10cd93430ae8884d3d658cd9554dc0dd0ca9f75a",
+        "extract_to": "repo"
+    },
+    "model_info": {
+        "architecture": "MediaPipe Pose (BlazePose) model_complexity=2",
+        "framework": "MediaPipe",
+        "weights_file": "bundled in mediapipe package",
+        "num_landmarks": 33,
+        "landmark_format": "mediapipe_33",
+        "fall_method": "shoulder_y_threshold (heuristic, not ML)",
+        "training_dataset": "N/A (heuristic-based, no training)"
+    },
+    "outputs": {
+        "provides_keypoints": true,
+        "keypoint_format": "mediapipe_33 (superset of coco_17)",
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_absolute (derived from landmark extremes)",
+        "provides_activity_label": true,
+        "activity_labels": [
+            "falling",
+            "not_falling"
+        ],
+        "provides_tracking_id": false
+    },
+    "config_schema": {
+        "fall_multiplier": {
+            "type": "number",
+            "default": 1.5,
+            "min": 1.1,
+            "max": 3.0,
+            "description": "Shoulder Y must exceed previous \u00d7 this multiplier to trigger fall"
+        },
+        "check_interval_sec": {
+            "type": "number",
+            "default": 2.0,
+            "min": 0.1,
+            "max": 10.0,
+            "description": "Seconds between fall checks (original: 2s)"
+        },
+        "min_detection_confidence": {
+            "type": "number",
+            "default": 0.7,
+            "min": 0.1,
+            "max": 1.0,
+            "description": "MediaPipe pose detection confidence threshold"
+        },
+        "model_complexity": {
+            "type": "integer",
+            "default": 2,
+            "min": 0,
+            "max": 2,
+            "description": "MediaPipe model complexity (0=lite, 1=full, 2=heavy)"
+        }
+    },
+    "startup_time_seconds": 10
+}

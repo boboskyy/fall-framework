@@ -761,7 +761,11 @@ def batch(ctx, zip_file, detectors, input_type, config, label, use_async, output
 def status(ctx, id):
     client = _get_client(ctx)
     try:
-        if id.startswith('b-'):
+        if id.startswith('eval-'):
+            data = client._get(f'/api/v1/evaluate/{id}/status')
+            format_status(data)
+            return
+        elif id.startswith('b-'):
             data = client.get_batch_status(id)
         elif id.startswith('c-'):
             data = client.get_comparison(id)
@@ -779,7 +783,14 @@ def status(ctx, id):
 def result(ctx, id, output_json):
     client = _get_client(ctx)
     try:
-        if id.startswith('b-'):
+        if id.startswith('eval-'):
+            data = client._get(f'/api/v1/evaluate/{id}/results')
+            if output_json:
+                console.print_json(data=data)
+            else:
+                _format_evaluation_result(data)
+            return
+        elif id.startswith('b-'):
             data = client.get_batch_results(id)
             format_batch_status(data, raw_json=output_json)
         elif id.startswith('c-'):
@@ -803,6 +814,421 @@ def label(ctx, id, label_text):
         print_success(f'Label set: {data.get("id")} → "{data.get("label")}"')
     except GatewayError as e:
         print_error(str(e))
+
+
+# === Dataset subgroup ===
+
+@cli.group()
+@click.pass_context
+def dataset(ctx):
+    """Manage datasets for evaluation."""
+    pass
+
+
+@dataset.command('list')
+@click.option('--status', '-s', default=None, help='Filter by status (available/downloaded/user_uploaded)')
+@click.pass_context
+def dataset_list(ctx, status):
+    """List all datasets."""
+    client = _get_client(ctx)
+    try:
+        data = client._get('/api/v1/datasets')
+        datasets = data.get('datasets', [])
+        if status:
+            datasets = [d for d in datasets if d.get('status') == status]
+
+        from rich.table import Table
+        from rich import box
+        table = Table(box=box.SIMPLE, show_lines=False)
+        table.add_column('Name', style='bold')
+        table.add_column('Status')
+        table.add_column('GT Type')
+        table.add_column('Files', justify='right')
+        table.add_column('FALL', justify='right')
+        table.add_column('ADL', justify='right')
+        table.add_column('Size', justify='right')
+
+        for ds in datasets:
+            st = ds.get('status', '')
+            color = {'downloaded': 'green', 'user_uploaded': 'cyan',
+                     'available': 'yellow', 'downloading': 'blue'}.get(st, 'white')
+            size = f'{ds.get("size_mb", 0)} MB' if ds.get('size_mb') else '?'
+            table.add_row(
+                ds.get('name', ''),
+                f'[{color}]{st}[/{color}]',
+                ds.get('ground_truth_type', ''),
+                str(ds.get('total_files', 0)),
+                str(ds.get('total_fall', 0)),
+                str(ds.get('total_adl', 0)),
+                size,
+            )
+
+        console.print(table)
+    except GatewayError as e:
+        print_error(str(e))
+
+
+@dataset.command('info')
+@click.argument('name')
+@click.pass_context
+def dataset_info(ctx, name):
+    """Show dataset details."""
+    client = _get_client(ctx)
+    try:
+        data = client._get(f'/api/v1/datasets/{name}')
+        console.print_json(data=data)
+    except GatewayError as e:
+        print_error(str(e))
+
+
+@dataset.command('files')
+@click.argument('name')
+@click.option('--label', '-l', default=None, help='Filter by label (FALL/ADL/UNLABELED)')
+@click.pass_context
+def dataset_files(ctx, name, label):
+    """List files in a dataset."""
+    client = _get_client(ctx)
+    try:
+        params = {}
+        if label:
+            params['label'] = label
+        data = client._get(f'/api/v1/datasets/{name}/files', params=params)
+
+        from rich.table import Table
+        from rich import box
+        table = Table(title=f'Dataset: {name}', box=box.SIMPLE)
+        table.add_column('Filename', style='bold')
+        table.add_column('Label')
+        table.add_column('GT')
+        table.add_column('Duration', justify='right')
+        table.add_column('Resolution')
+        table.add_column('Size', justify='right')
+
+        for f in data.get('files', []):
+            lbl = f.get('label', '')
+            color = {'FALL': 'red', 'ADL': 'green', 'UNLABELED': 'dim'}.get(lbl, 'white')
+            gt = 'Y' if f.get('fall_detected_ground_truth') else ('N' if f.get('fall_detected_ground_truth') is False else '?')
+            dur = f'{f["duration_seconds"]:.1f}s' if f.get('duration_seconds') else '?'
+            size = f'{f.get("size_bytes", 0) / 1024 / 1024:.1f} MB'
+            table.add_row(
+                f.get('filename', ''),
+                f'[{color}]{lbl}[/{color}]',
+                gt, dur,
+                f.get('resolution', '?'),
+                size,
+            )
+
+        console.print(table)
+        pag = data.get('pagination', {})
+        if pag.get('total_pages', 1) > 1:
+            console.print(f'  Page {pag["page"]}/{pag["total_pages"]}')
+    except GatewayError as e:
+        print_error(str(e))
+
+
+@dataset.command('download')
+@click.argument('name')
+@click.pass_context
+def dataset_download(ctx, name):
+    """Download a dataset from the registry."""
+    client = _get_client(ctx)
+    try:
+        data = client._post(f'/api/v1/datasets/{name}/download')
+        if data.get('error'):
+            print_error(data.get('message', data['error']))
+        else:
+            print_success(f'Download started for "{name}"')
+            dl_id = data.get('download_id')
+            if dl_id:
+                print_info(f'Download ID: {dl_id}')
+    except GatewayError as e:
+        print_error(str(e))
+
+
+@dataset.command('delete')
+@click.argument('name')
+@click.confirmation_option(prompt='Are you sure you want to delete this dataset?')
+@click.pass_context
+def dataset_delete(ctx, name):
+    """Delete a dataset."""
+    client = _get_client(ctx)
+    try:
+        data = client._delete(f'/api/v1/datasets/{name}')
+        if data.get('deleted'):
+            print_success(f'Dataset "{name}" deleted')
+        else:
+            print_error(data.get('message', 'Delete failed'))
+    except GatewayError as e:
+        print_error(str(e))
+
+
+@dataset.command('upload')
+@click.argument('zip_path')
+@click.option('--name', '-n', default=None, help='Dataset name (auto-generated if omitted)')
+@click.pass_context
+def dataset_upload(ctx, zip_path, name):
+    """Upload a custom dataset zip."""
+    client = _get_client(ctx)
+    if not os.path.exists(zip_path):
+        print_error(f'File not found: {zip_path}')
+        return
+    try:
+        import requests as req_lib
+        url = f'{client.base_url}/api/v1/datasets/upload'
+        with open(zip_path, 'rb') as f:
+            files = {'file': (os.path.basename(zip_path), f)}
+            form_data = {}
+            if name:
+                form_data['name'] = name
+            with console.status('Uploading dataset...'):
+                resp = req_lib.post(url, files=files, data=form_data, timeout=600)
+        data = resp.json()
+        if resp.status_code >= 400:
+            print_error(data.get('message', 'Upload failed'))
+        else:
+            print_success(f'Dataset uploaded: {data.get("name", "?")}')
+            console.print(f'  Structure: {data.get("detected_structure", "?")}')
+            console.print(f'  Ground truth: {data.get("ground_truth_type", "?")}')
+            console.print(f'  Files: {data.get("total_files", 0)} ({data.get("total_fall", 0)} FALL, {data.get("total_adl", 0)} ADL)')
+    except Exception as e:
+        print_error(str(e))
+
+
+@dataset.command('refresh')
+@click.pass_context
+def dataset_refresh(ctx):
+    """Refresh dataset registry from remote."""
+    client = _get_client(ctx)
+    try:
+        data = client._post('/api/v1/datasets/refresh-registry')
+        avail = data.get('available', [])
+        downloaded = data.get('downloaded', [])
+        print_success(f'Registry refreshed: {len(avail)} available, {len(downloaded)} downloaded')
+    except GatewayError as e:
+        print_error(str(e))
+
+
+@dataset.command('label')
+@click.argument('name')
+@click.argument('filename')
+@click.argument('label_value', type=click.Choice(['FALL', 'ADL', 'UNLABELED']))
+@click.pass_context
+def dataset_label(ctx, name, filename, label_value):
+    """Label a file in a dataset."""
+    client = _get_client(ctx)
+    try:
+        data = client._patch(f'/api/v1/datasets/{name}/files/{filename}',
+                             json={'label': label_value})
+        if data.get('error'):
+            print_error(data.get('message', data['error']))
+        else:
+            print_success(f'{filename} → {label_value}')
+    except GatewayError as e:
+        print_error(str(e))
+
+
+# === Evaluation commands (flat, matching existing pattern) ===
+
+@cli.command('evaluate')
+@click.argument('dataset_name')
+@click.option('--detectors', '-d', required=True, help='Comma-separated detector names')
+@click.option('--files', '-f', 'selected_files', default=None, help='Comma-separated filenames (default: all)')
+@click.option('--config', '-c', multiple=True, help='Config: key=value or detector:key=value')
+@click.option('--min-fall-frames', default=1, type=int, help='Min fall frames for verdict (default: 1)')
+@click.option('--min-fall-percentage', default=0.0, type=float, help='Min fall percentage for verdict (default: 0.0)')
+@click.option('--sync', is_flag=True, help='Wait for completion')
+@click.option('--json', 'output_json', is_flag=True, help='Output raw JSON')
+@click.pass_context
+def evaluate(ctx, dataset_name, detectors, selected_files, config,
+             min_fall_frames, min_fall_percentage, sync, output_json):
+    """Evaluate a dataset against detectors."""
+    client = _get_client(ctx)
+    detector_list = [d.strip() for d in detectors.split(',')]
+    parsed_config = _parse_config(config)
+    files_list = [f.strip() for f in selected_files.split(',')] if selected_files else None
+
+    body = {
+        'dataset': dataset_name,
+        'detectors': detector_list,
+        'selected_files': files_list,
+        'config': parsed_config if parsed_config else None,
+        'verdict_config': {
+            'min_fall_frames': min_fall_frames,
+            'min_fall_percentage': min_fall_percentage,
+        },
+        'sync': sync,
+    }
+
+    try:
+        if sync:
+            with console.status(f'Evaluating {dataset_name} with {len(detector_list)} detector(s)...'):
+                data = client._post('/api/v1/evaluate', json=body)
+            if output_json:
+                console.print_json(data=data)
+            else:
+                _format_evaluation_result(data)
+        else:
+            data = client._post('/api/v1/evaluate', json=body)
+            if data.get('error'):
+                print_error(data.get('message', data['error']))
+            else:
+                eval_id = data.get('eval_id', '?')
+                print_success(f'Evaluation started: {eval_id}')
+                print_info(f'Tasks: {data.get("total_tasks", 0)}')
+                print_info(f'Check: fallfw evaluate-status {eval_id}')
+    except GatewayError as e:
+        print_error(str(e))
+
+
+@cli.command('evaluate-status')
+@click.argument('eval_id')
+@click.pass_context
+def evaluate_status(ctx, eval_id):
+    """Check evaluation progress."""
+    client = _get_client(ctx)
+    try:
+        data = client._get(f'/api/v1/evaluate/{eval_id}/status')
+        if data.get('error'):
+            print_error(data.get('message', data['error']))
+            return
+
+        st = data.get('status', 'unknown')
+        total = data.get('total_tasks', 0)
+        completed = data.get('completed_tasks', 0)
+        failed = data.get('failed_tasks', 0)
+        pct = data.get('progress_pct', 0)
+
+        icon = {'completed': '[green]●[/green]', 'running': '[blue]◐[/blue]',
+                'failed': '[red]●[/red]', 'partial': '[yellow]◑[/yellow]',
+                'pending': '[dim]○[/dim]'}.get(st, '?')
+        console.print(f'  {icon} {eval_id}: {st}')
+        console.print(f'  Progress: {completed}/{total} ({pct}%) — {failed} failed')
+    except GatewayError as e:
+        print_error(str(e))
+
+
+@cli.command('evaluate-result')
+@click.argument('eval_id')
+@click.option('--format', '-f', 'fmt', type=click.Choice(['table', 'json']), default='table')
+@click.pass_context
+def evaluate_result(ctx, eval_id, fmt):
+    """View evaluation results."""
+    client = _get_client(ctx)
+    try:
+        data = client._get(f'/api/v1/evaluate/{eval_id}/results')
+        if data.get('error'):
+            print_error(data.get('message', data['error']))
+            return
+
+        if fmt == 'json':
+            console.print_json(data=data)
+        else:
+            _format_evaluation_result(data)
+    except GatewayError as e:
+        print_error(str(e))
+
+
+@cli.command('evaluate-export')
+@click.argument('eval_id')
+@click.option('--format', '-f', 'fmt', type=click.Choice(['json', 'csv']), default='csv')
+@click.option('--output', '-o', default=None, help='Output file path')
+@click.pass_context
+def evaluate_export(ctx, eval_id, fmt, output):
+    """Export evaluation results."""
+    client = _get_client(ctx)
+    try:
+        if fmt == 'csv':
+            import requests as req_lib
+            url = f'{client.base_url}/api/v1/evaluate/{eval_id}/export?format=csv'
+            resp = req_lib.get(url, timeout=30)
+            if resp.status_code != 200:
+                print_error(f'Export failed: {resp.text}')
+                return
+            content = resp.text
+        else:
+            data = client._get(f'/api/v1/evaluate/{eval_id}/export', params={'format': 'json'})
+            content = json.dumps(data, indent=2)
+
+        if output:
+            with open(output, 'w') as f:
+                f.write(content)
+            print_success(f'Exported to {output}')
+        else:
+            console.print(content)
+    except GatewayError as e:
+        print_error(str(e))
+
+
+def _format_evaluation_result(data):
+    """Format evaluation results as Rich tables."""
+    from rich.table import Table
+    from rich import box
+    from rich.panel import Panel
+
+    eval_id = data.get('eval_id', '?')
+    dataset = data.get('dataset_name', '?')
+    gt_type = data.get('ground_truth_type', '?')
+    total_eval = data.get('total_files_evaluated', 0)
+    total_ds = data.get('total_files_in_dataset', 0)
+
+    console.print(Panel(
+        f'Dataset: {dataset} | GT: {gt_type} | Files: {total_eval}/{total_ds}',
+        title=f'Evaluation {eval_id}',
+    ))
+
+    # Detector summaries
+    summaries = data.get('detector_summaries', [])
+    if summaries:
+        table = Table(title='Detector Metrics', box=box.SIMPLE)
+        table.add_column('Detector', style='bold')
+        table.add_column('Acc', justify='right')
+        table.add_column('Prec', justify='right')
+        table.add_column('Recall', justify='right')
+        table.add_column('F1', justify='right')
+        table.add_column('TP', justify='right')
+        table.add_column('TN', justify='right')
+        table.add_column('FP', justify='right')
+        table.add_column('FN', justify='right')
+        table.add_column('Avg Time', justify='right')
+
+        for s in summaries:
+            f1 = s.get('f1_score', 0)
+            f1_color = 'green' if f1 >= 0.8 else ('yellow' if f1 >= 0.5 else 'red')
+            table.add_row(
+                s.get('detector_name', ''),
+                f'{s.get("accuracy", 0):.3f}',
+                f'{s.get("precision", 0):.3f}',
+                f'{s.get("recall", 0):.3f}',
+                f'[{f1_color}]{f1:.3f}[/{f1_color}]',
+                str(s.get('true_positives', 0)),
+                str(s.get('true_negatives', 0)),
+                str(s.get('false_positives', 0)),
+                str(s.get('false_negatives', 0)),
+                f'{s.get("avg_processing_time_ms", 0):.0f}ms',
+            )
+        console.print(table)
+
+    # Cross-detector agreement
+    agreement = data.get('cross_detector_agreement')
+    if agreement:
+        console.print(f'\n  [bold]Cross-detector agreement:[/bold]')
+        console.print(f'    Average: {agreement.get("average_agreement", 0):.3f}')
+        console.print(f'    Best: {agreement.get("best_detector", "?")}')
+        console.print(f'    Unanimous: {agreement.get("unanimous_files", 0)} files')
+        console.print(f'    Split: {agreement.get("split_files", 0)} files')
+
+    # Overall
+    overall = data.get('overall_statistics')
+    if overall:
+        console.print(f'\n  [bold]Best detectors:[/bold]')
+        console.print(f'    Accuracy: {overall.get("best_accuracy_detector", "?")}')
+        console.print(f'    F1: {overall.get("best_f1_detector", "?")}')
+        console.print(f'    Recall: {overall.get("best_recall_detector", "?")}')
+        console.print(f'    Precision: {overall.get("best_precision_detector", "?")}')
+
+    wall = data.get('total_wall_time_seconds')
+    if wall:
+        console.print(f'\n  Total time: {wall:.1f}s')
 
 
 class _noop_context:

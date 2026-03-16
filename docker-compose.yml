@@ -8,11 +8,13 @@ services:
     volumes:
       - ./shared:/shared
       - ./detectors:/detectors
+      - ./datasets:/datasets
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro
     environment:
       - FLASK_ENV=production
       - FALLFW_REPO_URL=https://github.com/boboskyy/fall-detector-repos/releases/download/v1.0/
+      - FALLFW_DATASET_REGISTRY_URL=https://github.com/boboskyy/fall-detector-repos/releases/download/datasets-v1/datasets_registry.json
     networks:
       - fall-detection
     healthcheck:
@@ -50,7 +52,6 @@ services:
     environment:
       - FLASK_ENV=production
       - TF_CPP_MIN_LOG_LEVEL=2
-      - CUDA_VISIBLE_DEVICES=-1
     networks:
       - fall-detection
     healthcheck:
@@ -111,7 +112,6 @@ services:
     environment:
       - FLASK_ENV=production
       - TF_CPP_MIN_LOG_LEVEL=2
-      - CUDA_VISIBLE_DEVICES=-1
     networks:
       - fall-detection
     healthcheck:
@@ -120,6 +120,129 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  noorkhokhar-fall:
+    build:
+      context: .
+      dockerfile: detectors/noorkhokhar_yolov8_fall/Dockerfile
+    ports:
+      - "3005:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+      - KMP_DUPLICATE_LIB_OK=True
+      - YOLO_AUTOINSTALL=false
+      - YOLO_VERBOSE=false
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  barkhaaroraa-mediapipe:
+    build:
+      context: .
+      dockerfile: detectors/barkhaaroraa_fall_detection_dl/Dockerfile
+    ports:
+      - "3006:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  tonlongthuat-yolo11:
+    build:
+      context: .
+      dockerfile: detectors/tonlongthuat_fall_detection/Dockerfile
+    ports:
+      - "3007:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+      - YOLO_AUTOINSTALL=false
+      - YOLO_VERBOSE=false
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  yb-class-fall:
+    build:
+      context: .
+      dockerfile: detectors/yb_class_fall/Dockerfile
+    ports:
+      - "3008:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  parichehrvn-tcn:
+    build:
+      context: .
+      dockerfile: detectors/parichehrvn_tcn_fall/Dockerfile
+    ports:
+      - "3009:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+      - YOLO_AUTOINSTALL=false
+      - YOLO_VERBOSE=false
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  itskyledc-yolov12:
+    build:
+      context: .
+      dockerfile: detectors/itskyledc_yolov12_mediapipe/Dockerfile
+    ports:
+      - "3010:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+      - YOLO_AUTOINSTALL=false
+      - YOLO_VERBOSE=false
+    networks:
+      - fall-detection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   shared:

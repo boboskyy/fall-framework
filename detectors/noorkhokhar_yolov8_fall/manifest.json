@@ -1,0 +1,80 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "noorkhokhar_yolov8_fall",
+    "display_name": "YOLOv8 Fall Detection (Noorkhokhar)",
+    "version": "1.0.0",
+    "description": "Fall detection using a custom-trained YOLOv8s object detection model with a single 'Fall-Detected' class and ByteTrack multi-object tracking.",
+    "github_url": "https://github.com/noorkhokhar99/Fall_Detection_Using_Yolov8",
+    "repository": "https://github.com/noorkhokhar99/Fall_Detection_Using_Yolov8",
+    "category": "object_detection",
+    "tags": [
+        "YOLOv8",
+        "ByteTrack",
+        "Object Detection"
+    ],
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": true,
+    "requires_gpu": false,
+    "port": 3005,
+    "internal_port": 5000,
+    "docker_service_name": "noorkhokhar-fall",
+    "docker": {
+        "context": "../..",
+        "dockerfile": "detectors/noorkhokhar_yolov8_fall/Dockerfile"
+    },
+    "download": {
+        "archive_name": "noorkhokhar_yolov8_fall.tar.gz",
+        "size_mb": 42.0,
+        "sha256": "bfc35332e7d1c23f76c49339a6f72fd6e1cb535327f6003a55ee90c433e46805",
+        "extract_to": "repo"
+    },
+    "model_info": {
+        "architecture": "YOLOv8s (Small)",
+        "framework": "PyTorch (via Ultralytics)",
+        "weights_file": "repo/fall_det_1.pt",
+        "weights_size_mb": 21.5,
+        "num_classes": 1,
+        "class_names": [
+            "Fall-Detected"
+        ],
+        "training_imgsz": 640,
+        "training_dataset": "Fall-Detection-4 (likely Roboflow)",
+        "training_epochs": 100,
+        "training_batch_size": 16
+    },
+    "outputs": {
+        "provides_keypoints": false,
+        "keypoint_format": null,
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_absolute",
+        "provides_activity_label": true,
+        "activity_labels": [
+            "falling"
+        ],
+        "provides_tracking_id": true,
+        "tracker": "ByteTrack"
+    },
+    "config_schema": {
+        "confidence_threshold": {
+            "type": "number",
+            "default": 0.5,
+            "min": 0.1,
+            "max": 1.0,
+            "description": "Minimum confidence for fall detections"
+        },
+        "frame_skip": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 30,
+            "description": "Process every Nth frame (1 = every frame)"
+        }
+    },
+    "gpu_support": {
+        "capable": true,
+        "notes": "YOLOv8 inference benefits from GPU via PyTorch CUDA"
+    },
+    "startup_time_seconds": 15
+}

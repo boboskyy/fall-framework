@@ -1,0 +1,91 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "itskyledc_yolov12_mediapipe",
+    "display_name": "YOLOv12 + MediaPipe Fall Detection (itSkyledc)",
+    "version": "1.0.0",
+    "description": "Multi-person fall detection using YOLOv12 for person detection, MediaPipe Pose for 33-landmark skeleton estimation, and rule-based heuristic fall classification with 4 fall types (step, slip, trip, stump). Uses IoU-based multi-person tracking.",
+    "github_url": "https://github.com/itSkyyledc/Human-Fall-Detection-Yolov12-Mediapipe",
+    "repository": "https://github.com/itSkyyledc/Human-Fall-Detection-Yolov12-Mediapipe",
+    "category": "pose_estimation",
+    "tags": [
+        "YOLOv12",
+        "MediaPipe",
+        "Multi-Fall-Type"
+    ],
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": true,
+    "requires_gpu": false,
+    "port": 3010,
+    "internal_port": 5000,
+    "docker_service_name": "itskyledc-yolov12",
+    "docker": {
+        "context": "../..",
+        "dockerfile": "detectors/itskyledc_yolov12_mediapipe/Dockerfile"
+    },
+    "download": {
+        "archive_name": "itskyledc_yolov12_mediapipe.tar.gz",
+        "size_mb": 52.0,
+        "sha256": "503bc9b3ceaf0daa495f8639f82c990c2c8172ec425eb1c88a30e3308dd6605a",
+        "extract_to": "repo"
+    },
+    "model_info": {
+        "architecture": "YOLOv12n1 (person detection) + MediaPipe Pose (33 landmarks) + rule-based heuristics",
+        "framework": "PyTorch + MediaPipe",
+        "weights_file": "yolov12n1.pt",
+        "training_dataset": "COCO (person detection); MediaPipe pre-trained pose; fall heuristics are hand-tuned"
+    },
+    "outputs": {
+        "provides_keypoints": true,
+        "keypoint_format": "mediapipe_33_to_coco_17",
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_absolute",
+        "provides_activity_label": true,
+        "activity_labels": [
+            "normal",
+            "fall",
+            "slip_and_fall",
+            "step_and_fall",
+            "trip_and_fall",
+            "stump_and_fall"
+        ],
+        "provides_tracking_id": true,
+        "tracker": "iou-based"
+    },
+    "config_schema": {
+        "confidence_threshold": {
+            "type": "number",
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "description": "YOLO person detection confidence threshold"
+        },
+        "fall_threshold": {
+            "type": "number",
+            "default": 0.4,
+            "min": 0.1,
+            "max": 1.0,
+            "description": "Vertical drop threshold for fall criteria"
+        },
+        "angle_threshold": {
+            "type": "integer",
+            "default": 45,
+            "min": 10,
+            "max": 90,
+            "description": "Body angle with vertical axis threshold (degrees)"
+        },
+        "frame_skip": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 30,
+            "description": "Process every Nth frame (1 = every frame, higher = faster but less accurate)"
+        }
+    },
+    "gpu_support": {
+        "capable": true,
+        "notes": "YOLOv12 person detection benefits from GPU; MediaPipe pose is CPU-only"
+    },
+    "startup_time_seconds": 30
+}

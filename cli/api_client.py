@@ -52,6 +52,22 @@ class GatewayClient:
 
         return data
 
+    def _get(self, full_path, params=None, timeout=REQUEST_TIMEOUT):
+        """Request with full URL path (e.g. /api/v1/datasets)."""
+        path = full_path.replace('/api/v1', '', 1) if full_path.startswith('/api/v1') else full_path
+        return self._request('GET', path, params=params, timeout=timeout)
+
+    def _post(self, full_path, json=None, timeout=REQUEST_TIMEOUT):
+        path = full_path.replace('/api/v1', '', 1) if full_path.startswith('/api/v1') else full_path
+        return self._request('POST', path, json=json, timeout=timeout)
+
+    def _delete(self, full_path, timeout=REQUEST_TIMEOUT):
+        path = full_path.replace('/api/v1', '', 1) if full_path.startswith('/api/v1') else full_path
+        return self._request('DELETE', path, timeout=timeout)
+
+    def _patch(self, full_path, json=None, timeout=REQUEST_TIMEOUT):
+        path = full_path.replace('/api/v1', '', 1) if full_path.startswith('/api/v1') else full_path
+        return self._request('PATCH', path, json=json, timeout=timeout)
 
     def is_reachable(self):
         try:

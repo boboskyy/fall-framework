@@ -28,6 +28,7 @@ env/
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
@@ -61,6 +62,7 @@ shared/uploads/*
 shared/outputs/*
 shared/temp/*
 shared/state/*
+shared/datasets/
 !shared/uploads/.gitkeep
 !shared/outputs/.gitkeep
 !shared/temp/.gitkeep
@@ -72,6 +74,12 @@ tests/test_videos/*
 
 # Logs
 *.log
+
+# Datasets (hosted on GitHub Releases, downloaded at runtime)
+datasets/
+
+# Scratch files
+xd.txt
 
 # OS
 .DS_Store
