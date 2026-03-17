@@ -335,6 +335,52 @@ def create_gateway_app():
             'count': len(files)
         })
 
+    @app.route('/api/v1/stream', methods=['GET'])
+    def stream_file():
+        from flask import send_file as _send_file
+
+        # ?filename= mode: search uploads then all datasets by bare filename
+        filename_only = request.args.get('filename', '').replace('\\', '/').strip('/')
+        if filename_only:
+            if '..' in filename_only or '/' in filename_only:
+                return jsonify({'error': 'Invalid filename'}), 400
+            # 1. uploads
+            candidate = str(file_manager.uploads_dir / filename_only)
+            if os.path.isfile(candidate):
+                return _send_file(candidate, conditional=True)
+            # 2. walk all datasets
+            if os.path.isdir('/datasets'):
+                for root, _, files in os.walk('/datasets'):
+                    if filename_only in files:
+                        return _send_file(os.path.join(root, filename_only), conditional=True)
+            return jsonify({'error': 'File not found'}), 404
+
+        # ?path= mode: explicit prefix-based path
+        path = request.args.get('path', '').replace('\\', '/').strip('/')
+        if not path or '..' in path:
+            return jsonify({'error': 'Invalid path'}), 400
+
+        if path.startswith('datasets/'):
+            full_path = os.path.join('/datasets', path[len('datasets/'):])
+            if not os.path.isfile(full_path):
+                parts = path[len('datasets/'):].split('/', 1)
+                if len(parts) == 2:
+                    dataset_dir = os.path.join('/datasets', parts[0])
+                    fname = parts[1]
+                    for root, _, files in os.walk(dataset_dir):
+                        if fname in files:
+                            full_path = os.path.join(root, fname)
+                            break
+        elif path.startswith('uploads/'):
+            full_path = str(file_manager.uploads_dir / path[len('uploads/'):])
+        else:
+            return jsonify({'error': 'Invalid path prefix'}), 400
+
+        if not os.path.isfile(full_path):
+            return jsonify({'error': 'File not found'}), 404
+
+        return _send_file(full_path, conditional=True)
+
     @app.route('/api/v1/files/<filename>', methods=['DELETE'])
     def delete_file(filename):
         file_path = str(file_manager.uploads_dir / filename)
