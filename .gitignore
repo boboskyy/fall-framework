@@ -76,7 +76,7 @@ tests/test_videos/*
 *.log
 
 # Datasets (hosted on GitHub Releases, downloaded at runtime)
-datasets/
+/datasets/
 
 # Scratch files
 xd.txt
