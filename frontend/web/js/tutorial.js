@@ -2,7 +2,7 @@
 // target element (amber) with a coach bar; advances when the user clicks it.
 // Progress index is kept in localStorage (NOT the URL); on reload only the
 // current step's highlight remains. Steps are an editable array.
-import { parse } from './router.js';
+import { parse, go } from './router.js';
 import { t } from './i18n.js';
 import { toast } from './components.js';
 
@@ -26,6 +26,7 @@ const STEPS = [
   { route: null,          sel: '#nav a[href$="/datasets"]',           text: 'tut_nav_datasets' },
   { route: null,          sel: '#nav a[href$="/detectors"]',          text: 'tut_nav_detectors' },
   { route: '/detectors',  sel: '#d-body a[href*="boboskyy"]',          text: 'tut_boboskyy' },
+  { route: null,          sel: '#sysbar',                              text: 'tut_drawer' },
 ];
 
 let idx = (() => { try { const v = parseInt(localStorage.getItem(KEY), 10); return Number.isFinite(v) ? v : 0; } catch { return 0; } })();
@@ -82,6 +83,16 @@ function tryPulse() {
 }
 
 function schedule() { if (scheduled) return; scheduled = true; setTimeout(() => { scheduled = false; tryPulse(); }, 120); }
+
+export function resetTutorial() {
+  idx = 0;
+  try { localStorage.removeItem(DONE); } catch {}
+  save();
+  clearPulse();
+  document.body.classList.remove('drawer-open');   // close the System drawer
+  go('/');                                          // step 1 lives on the Lab
+  schedule();
+}
 
 export function initTutorial() {
   const main = document.getElementById('app-main');

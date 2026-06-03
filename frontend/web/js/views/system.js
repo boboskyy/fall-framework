@@ -4,13 +4,18 @@ import { getDatasets, getDatasetDetail } from '../store.js';
 import { shortName, family, dsLabel } from '../format.js';
 import { qs, qsa, esc, spinner, healthBadge, toast } from '../components.js';
 import { isPreview } from '../config.js';
+import { resetTutorial } from '../tutorial.js';
 import { t } from '../i18n.js';
 
 export async function render(root) {
-  root.innerHTML = `<h2 class="sec-h">${esc(t('system_h'))}<span class="rule"></span></h2>
+  root.innerHTML = `<div class="row between" style="margin-bottom:1rem">
+      <span class="sec-h" style="margin:0">${esc(t('system_h'))}</span>
+      <button class="btn ghost sm" id="tut-reset">↻ ${esc(t('tut_restart'))}</button>
+    </div>
     <div id="sys-grid">${spinner('…')}</div>
     <h2 class="sec-h mt2">${esc(t('datasets_h'))}<span class="rule"></span></h2>
     <div id="sys-ds" class="grid auto"></div>`;
+  qs('#tut-reset', root).addEventListener('click', resetTutorial);
 
   async function loadDetectors() {
     const grid = qs('#sys-grid', root);

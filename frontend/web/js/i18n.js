@@ -44,7 +44,9 @@ const DICT = {
     tut_nav_eval: 'Zakładka: Ewaluacja', tut_nav_matrix: 'Zakładka: Macierz',
     tut_nav_datasets: 'Zakładka: Zbiory', tut_nav_detectors: 'Zakładka: Detektory',
     tut_boboskyy: 'Otwórz detektor boboskyy',
+    tut_drawer: 'Wysuń szufladę System (pasek na dole)',
     tut_done: 'Tutorial ukończony — pokazano wszystkie obecne funkcje.',
+    tut_restart: 'tutorial od nowa',
   },
   en: {
     nav_lab: 'Lab', nav_threshold: 'Threshold', nav_diversity: 'Diversity',
@@ -89,7 +91,9 @@ const DICT = {
     tut_nav_eval: 'Tab: Evaluate', tut_nav_matrix: 'Tab: Matrix',
     tut_nav_datasets: 'Tab: Datasets', tut_nav_detectors: 'Tab: Detectors',
     tut_boboskyy: 'Open the boboskyy detector',
+    tut_drawer: 'Open the System drawer (bottom bar)',
     tut_done: 'Tutorial complete — all current features shown.',
+    tut_restart: 'restart tutorial',
   },
 };
 
