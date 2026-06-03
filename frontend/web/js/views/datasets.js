@@ -60,14 +60,17 @@ export async function render(root, params) {
 
   // The /datasets list endpoint returns empty statistics — derive clips + fall/adl
   // from one completed evaluation per dataset (ground truth is in per_file_results).
-  const firstEval = {};
-  for (const e of evals) if (e.status === 'completed' && !firstEval[e.dataset_name]) firstEval[e.dataset_name] = e.eval_id;
+  const pick = {};   // biggest (most clips) completed eval per dataset — avoids tiny reruns
+  for (const e of evals) {
+    if (e.status !== 'completed' && e.status !== 'partial') continue;
+    if (!pick[e.dataset_name] || e.completed_tasks > pick[e.dataset_name].completed_tasks) pick[e.dataset_name] = e;
+  }
   const derived = {};
-  await Promise.all(Object.entries(firstEval).map(async ([name, id]) => {
+  await Promise.all(Object.values(pick).map(async (e) => {
     try {
-      const sm = ((await getResults(id)).detector_summaries || [])[0];
+      const sm = ((await getResults(e.eval_id)).detector_summaries || [])[0];
       const pf = sm && sm.per_file_results;
-      if (pf) derived[name] = {
+      if (pf) derived[e.dataset_name] = {
         total: sm.total_files,
         fall: pf.filter(r => r.ground_truth_fall === true).length,
         adl: pf.filter(r => r.ground_truth_fall === false).length,

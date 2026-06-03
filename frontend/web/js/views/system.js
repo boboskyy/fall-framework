@@ -1,6 +1,6 @@
 // views/system.js — infra, demoted into the bottom drawer.
 import { api } from '../api.js';
-import { getDatasets } from '../store.js';
+import { getDatasets, getEvals, getResults } from '../store.js';
 import { shortName, family, dsLabel } from '../format.js';
 import { qs, qsa, esc, spinner, healthBadge, toast } from '../components.js';
 import { isPreview } from '../config.js';
@@ -26,8 +26,10 @@ export async function render(root) {
             </div>
             ${healthBadge(x.container_status)}
           </div>
-          <div class="muted-note mt" style="margin-top:.5rem">
-            ${esc(x.category || '')} · :${x.port} · ${x.requires_gpu ? 'gpu' : 'cpu'}${x.device ? ' (' + esc(x.device) + ')' : ''}
+          <div class="metabar" style="margin-top:.5rem">
+            ${x.category ? `<span class="badge muted">${esc(x.category)}</span>` : ''}
+            <span class="badge muted">:${x.port}</span>
+            <span class="badge ${x.requires_gpu ? 'info' : 'muted'}">${x.requires_gpu ? 'GPU' : 'CPU'}${x.device && x.device.toLowerCase() !== (x.requires_gpu ? 'gpu' : 'cpu') ? ' · ' + esc(x.device) : ''}</span>
           </div>
           ${isPreview() ? '' : `<div class="btn-row mt">
             <button class="btn sm" data-act="start">${esc(t('start_c'))}</button>
@@ -54,12 +56,35 @@ export async function render(root) {
 
   try {
     const ds = await getDatasets();
+    // /datasets list stats are empty — derive clips + fall/adl from one completed eval per dataset
+    const evals = await getEvals().catch(() => []);
+    const pick = {};   // biggest (most clips) completed eval per dataset — avoids tiny reruns
+    for (const e of evals) {
+      if (e.status !== 'completed' && e.status !== 'partial') continue;
+      if (!pick[e.dataset_name] || e.completed_tasks > pick[e.dataset_name].completed_tasks) pick[e.dataset_name] = e;
+    }
+    const derived = {};
+    await Promise.all(Object.values(pick).map(async (e) => {
+      try {
+        const sm = ((await getResults(e.eval_id)).detector_summaries || [])[0];
+        const pf = sm && sm.per_file_results;
+        if (pf) derived[e.dataset_name] = {
+          total: sm.total_files,
+          fall: pf.filter(r => r.ground_truth_fall === true).length,
+          adl: pf.filter(r => r.ground_truth_fall === false).length,
+        };
+      } catch {}
+    }));
     qs('#sys-ds', root).innerHTML = ds.map(d => {
-      const st = d.statistics || {};
+      const st = d.statistics || {}, dv = derived[d.name] || {};
+      const total = dv.total ?? st.total_files ?? '?', fall = dv.fall ?? st.total_fall ?? '?', adl = dv.adl ?? st.total_adl ?? '?';
       return `<div class="panel">
         <strong class="mono">${esc(dsLabel(d.name))}</strong>
-        <div class="muted-note mt" style="margin-top:.5rem">
-          ${st.total_files ?? '?'} files · ${st.total_fall ?? '?'} fall / ${st.total_adl ?? '?'} adl · ${esc(d.input_type || '')}
+        <div class="metabar" style="margin-top:.5rem">
+          <span class="badge muted">${total} clips</span>
+          <span class="badge warn">${fall} fall</span>
+          <span class="badge muted">${adl} adl</span>
+          <span class="badge muted">${esc(d.input_type || '')}</span>
         </div></div>`;
     }).join('') || '<div class="empty">no datasets</div>';
   } catch {}
