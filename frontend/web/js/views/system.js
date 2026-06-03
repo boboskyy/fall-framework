@@ -1,6 +1,6 @@
 // views/system.js — infra, demoted into the bottom drawer.
 import { api } from '../api.js';
-import { getDatasets, getEvals, getResults } from '../store.js';
+import { getDatasets, getDatasetDetail } from '../store.js';
 import { shortName, family, dsLabel } from '../format.js';
 import { qs, qsa, esc, spinner, healthBadge, toast } from '../components.js';
 import { isPreview } from '../config.js';
@@ -57,27 +57,13 @@ export async function render(root) {
   try {
     const ds = await getDatasets();
     // /datasets list stats are empty — derive clips + fall/adl from one completed eval per dataset
-    const evals = await getEvals().catch(() => []);
-    const pick = {};   // biggest (most clips) completed eval per dataset — avoids tiny reruns
-    for (const e of evals) {
-      if (e.status !== 'completed' && e.status !== 'partial') continue;
-      if (!pick[e.dataset_name] || e.completed_tasks > pick[e.dataset_name].completed_tasks) pick[e.dataset_name] = e;
-    }
-    const derived = {};
-    await Promise.all(Object.values(pick).map(async (e) => {
-      try {
-        const sm = ((await getResults(e.eval_id)).detector_summaries || [])[0];
-        const pf = sm && sm.per_file_results;
-        if (pf) derived[e.dataset_name] = {
-          total: sm.total_files,
-          fall: pf.filter(r => r.ground_truth_fall === true).length,
-          adl: pf.filter(r => r.ground_truth_fall === false).length,
-        };
-      } catch {}
+    const statsByDs = {};   // real stats from per-dataset detail (list endpoint is empty)
+    await Promise.all(ds.map(async d => {
+      try { statsByDs[d.name] = (await getDatasetDetail(d.name)).statistics || {}; } catch {}
     }));
     qs('#sys-ds', root).innerHTML = ds.map(d => {
-      const st = d.statistics || {}, dv = derived[d.name] || {};
-      const total = dv.total ?? st.total_files ?? '?', fall = dv.fall ?? st.total_fall ?? '?', adl = dv.adl ?? st.total_adl ?? '?';
+      const st = statsByDs[d.name] || d.statistics || {};
+      const total = st.total_files ?? '?', fall = st.total_fall ?? '?', adl = st.total_adl ?? '?';
       return `<div class="panel">
         <strong class="mono">${esc(dsLabel(d.name))}</strong>
         <div class="metabar" style="margin-top:.5rem">

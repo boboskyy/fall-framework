@@ -1,6 +1,6 @@
 // views/datasets.js — dataset cards + detail. ?name= shows file breakdown.
 import { api } from '../api.js';
-import { getDatasets, getEvals, getResults } from '../store.js';
+import { getDatasets, getEvals, getDatasetDetail } from '../store.js';
 import { dsLabel, dec } from '../format.js';
 import { qs, qsa, esc, spinner, empty, toast } from '../components.js';
 import { stripedBar } from '../charts.js';
@@ -58,31 +58,17 @@ export async function render(root, params) {
   const evalCount = {};
   evals.forEach(e => { evalCount[e.dataset_name] = (evalCount[e.dataset_name] || 0) + 1; });
 
-  // The /datasets list endpoint returns empty statistics — derive clips + fall/adl
-  // from one completed evaluation per dataset (ground truth is in per_file_results).
-  const pick = {};   // biggest (most clips) completed eval per dataset — avoids tiny reruns
-  for (const e of evals) {
-    if (e.status !== 'completed' && e.status !== 'partial') continue;
-    if (!pick[e.dataset_name] || e.completed_tasks > pick[e.dataset_name].completed_tasks) pick[e.dataset_name] = e;
-  }
-  const derived = {};
-  await Promise.all(Object.values(pick).map(async (e) => {
-    try {
-      const sm = ((await getResults(e.eval_id)).detector_summaries || [])[0];
-      const pf = sm && sm.per_file_results;
-      if (pf) derived[e.dataset_name] = {
-        total: sm.total_files,
-        fall: pf.filter(r => r.ground_truth_fall === true).length,
-        adl: pf.filter(r => r.ground_truth_fall === false).length,
-      };
-    } catch {}
+  // the /datasets list endpoint returns empty statistics → read real stats from
+  // each dataset's detail (works even for datasets with no evaluation, e.g. MCFD)
+  const statsByDs = {};
+  await Promise.all(ds.map(async d => {
+    try { statsByDs[d.name] = (await getDatasetDetail(d.name)).statistics || {}; } catch {}
   }));
 
   body.innerHTML = `<div class="grid auto">` + ds.map(d => {
-    const st = d.statistics || {};
-    const dv = derived[d.name] || {};
-    const total = dv.total ?? st.total_files ?? 0;
-    const fall = dv.fall ?? st.total_fall ?? 0, adl = dv.adl ?? st.total_adl ?? 0;
+    const st = statsByDs[d.name] || d.statistics || {};
+    const total = st.total_files ?? 0;
+    const fall = st.total_fall ?? 0, adl = st.total_adl ?? 0;
     const balance = total ? fall / total : 0;
     const skew = total && (fall / total < 0.2 || adl / total < 0.2);
     return `<a class="panel" href="${href('/datasets', { name: d.name })}" style="text-decoration:none">
@@ -110,18 +96,37 @@ async function detail(root, name) {
     <div id="dsd">${spinner('…')}</div>`;
   const el = qs('#dsd', root);
   try {
-    const d = await api.dataset(name);
-    const m = d.manifest || d.dataset || d;
+    const m = await getDatasetDetail(name);
     const st = m.statistics || {};
+    const files = m.files || [];
     el.innerHTML = `
       <div class="grid cols-4 section">
-        <div class="stat hl"><div class="k">clips</div><div class="v">${st.total_files ?? '–'}</div></div>
+        <div class="stat hl"><div class="k">clips</div><div class="v">${st.total_files ?? files.length}</div></div>
         <div class="stat"><div class="k">fall</div><div class="v">${st.total_fall ?? '–'}</div></div>
         <div class="stat"><div class="k">adl</div><div class="v">${st.total_adl ?? '–'}</div></div>
-        <div class="stat"><div class="k">avg duration</div><div class="v small">${st.avg_duration_seconds != null ? dec(st.avg_duration_seconds, 1) + ' s' : '–'}</div></div>
+        <div class="stat"><div class="k">avg duration</div><div class="v small">${st.avg_duration_seconds ? dec(st.avg_duration_seconds, 1) + ' s' : '–'}</div></div>
       </div>
-      <div class="panel"><div class="muted-note">${esc(m.description || '')}</div>
-        <div class="muted-note mt">input: ${esc(m.input_type || '')} · ground truth: ${esc(m.ground_truth_type || '')}
-          ${/^https?:\/\//i.test(m.source_url || '') ? ` · <a href="${esc(m.source_url)}" target="_blank" rel="noopener">source</a>` : ''}</div></div>`;
+      <div class="panel section"><div class="muted-note">${esc(m.description || '')}</div>
+        <div class="metabar mt">
+          <span class="badge muted">${esc(m.input_type || '')}</span>
+          <span class="badge muted">GT: ${esc(m.ground_truth_type || '')}</span>
+          ${/^https?:\/\//i.test(m.source_url || '') ? `<a class="badge info" href="${esc(m.source_url)}" target="_blank" rel="noopener">source ↗</a>` : ''}
+        </div></div>
+      <div class="panel"><div class="row between">
+          <div class="panel-h" style="margin:0">files <span class="dim">· ${files.length}</span></div>
+          <input class="ipt" id="file-filter" placeholder="filter…" style="max-width:240px"></div>
+        <div class="tbl-wrap" style="max-height:60vh"><table class="tbl">
+          <thead><tr><th>file</th><th>label</th><th>path</th></tr></thead>
+          <tbody id="ds-ftb"></tbody></table></div></div>`;
+    const renderFiles = (q = '') => {
+      const ql = q.toLowerCase();
+      const rows = files.filter(f => !ql || (f.filename || '').toLowerCase().includes(ql));
+      qs('#ds-ftb', el).innerHTML = rows.slice(0, 2000).map(f => `<tr>
+        <td class="mono">${esc(f.filename)}</td>
+        <td><span class="badge ${f.label === 'FALL' ? 'warn' : f.label === 'ADL' ? 'muted' : 'info'}">${esc(f.label)}</span></td>
+        <td class="mono dim">${esc(f.relative_path || '')}</td></tr>`).join('') || '<tr><td class="dim">no files</td></tr>';
+    };
+    renderFiles();
+    qs('#file-filter', el).addEventListener('input', e => renderFiles(e.target.value));
   } catch (e) { el.innerHTML = empty('error', e.message || e); }
 }

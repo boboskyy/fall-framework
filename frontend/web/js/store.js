@@ -3,7 +3,7 @@
 import { api } from './api.js';
 import { metricsFromCounts, countsAtThreshold, family, shortName, classifyAt, ALL_DS } from './format.js';
 
-const cache = { datasets: null, evals: null, results: new Map() };
+const cache = { datasets: null, evals: null, results: new Map(), dsDetail: new Map() };
 
 export async function getDatasets(force) {
   if (!cache.datasets || force) {
@@ -11,6 +11,16 @@ export async function getDatasets(force) {
     cache.datasets = Array.isArray(d) ? d : (d.datasets || []);
   }
   return cache.datasets;
+}
+
+// Per-dataset detail (manifest with REAL statistics + files; the list endpoint
+// returns empty statistics).
+export async function getDatasetDetail(name, force) {
+  if (!cache.dsDetail.has(name) || force) {
+    const d = await api.dataset(name);
+    cache.dsDetail.set(name, d.manifest || d.dataset || d);
+  }
+  return cache.dsDetail.get(name);
 }
 export async function getEvals(force) {
   if (!cache.evals || force) {
