@@ -32,6 +32,9 @@
   /* --- metrics --- */
   --maxw:1240px;
   --r:0;                 /* square everything */
+
+  /* render native controls (dropdown popups, scrollbars, etc.) in dark */
+  color-scheme: dark;
 }
 
 * { box-sizing:border-box; }
@@ -114,6 +117,11 @@ select {
 }
 select:hover { border-color:var(--blue); background-color:var(--blue-dim); }
 select:focus, .ipt:focus { outline:none; border-color:var(--blue); }
+/* the open option list (native popup) — keep it dark on every platform */
+select option, select optgroup {
+  background-color:var(--panel-2); color:var(--text);
+}
+select option:checked { background-color:var(--blue-dim); color:var(--head); }
 .ipt { cursor:text; border-style:dotted; }
 .ipt:hover { border-color:var(--muted); }
 
