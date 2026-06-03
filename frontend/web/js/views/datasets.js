@@ -1,6 +1,6 @@
 // views/datasets.js — dataset cards + detail. ?name= shows file breakdown.
 import { api } from '../api.js';
-import { getDatasets, getEvals } from '../store.js';
+import { getDatasets, getEvals, getResults } from '../store.js';
 import { dsLabel, dec } from '../format.js';
 import { qs, esc, spinner, empty } from '../components.js';
 import { stripedBar } from '../charts.js';
@@ -21,10 +21,28 @@ export async function render(root, params) {
   const evalCount = {};
   evals.forEach(e => { evalCount[e.dataset_name] = (evalCount[e.dataset_name] || 0) + 1; });
 
+  // The /datasets list endpoint returns empty statistics — derive clips + fall/adl
+  // from one completed evaluation per dataset (ground truth is in per_file_results).
+  const firstEval = {};
+  for (const e of evals) if (e.status === 'completed' && !firstEval[e.dataset_name]) firstEval[e.dataset_name] = e.eval_id;
+  const derived = {};
+  await Promise.all(Object.entries(firstEval).map(async ([name, id]) => {
+    try {
+      const sm = ((await getResults(id)).detector_summaries || [])[0];
+      const pf = sm && sm.per_file_results;
+      if (pf) derived[name] = {
+        total: sm.total_files,
+        fall: pf.filter(r => r.ground_truth_fall === true).length,
+        adl: pf.filter(r => r.ground_truth_fall === false).length,
+      };
+    } catch {}
+  }));
+
   body.innerHTML = `<div class="grid auto">` + ds.map(d => {
     const st = d.statistics || {};
-    const total = st.total_files || 0;
-    const fall = st.total_fall || 0, adl = st.total_adl || 0;
+    const dv = derived[d.name] || {};
+    const total = dv.total ?? st.total_files ?? 0;
+    const fall = dv.fall ?? st.total_fall ?? 0, adl = dv.adl ?? st.total_adl ?? 0;
     const balance = total ? fall / total : 0;
     const skew = total && (fall / total < 0.2 || adl / total < 0.2);
     return `<a class="panel" href="${href('/datasets', { name: d.name })}" style="text-decoration:none">
