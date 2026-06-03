@@ -1077,6 +1077,29 @@ def create_gateway_app():
             'count': len(evaluations),
         })
 
+    @app.route('/api/v1/evaluate/import', methods=['POST'])
+    def import_evaluation():
+        # Rebuild a completed evaluation 1:1 from exported per-clip rows
+        # (filename, ground_truth, verdict, classification, confidence,
+        #  fall_frames, total_frames, processing_time_ms). Persists to disk.
+        data = request.get_json(silent=True)
+        if not data or not data.get('dataset') or not data.get('detector') \
+                or not isinstance(data.get('rows'), list):
+            return jsonify({
+                'error': 'INVALID_REQUEST',
+                'message': 'Required: dataset, detector, rows (array of per-clip rows)',
+            }), 400
+        result = evaluation_manager.import_evaluation(
+            dataset_name=data['dataset'],
+            detector_name=data['detector'],
+            rows=data['rows'],
+            verdict_config=data.get('verdict_config'),
+            eval_id=data.get('eval_id'),
+            created_at=data.get('created_at'),
+            completed_at=data.get('completed_at'),
+        )
+        return jsonify(result), 201
+
 
     @app.route('/', methods=['GET'])
     def root():

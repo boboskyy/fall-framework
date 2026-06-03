@@ -1,7 +1,9 @@
 
 import csv
+import hashlib
 import io
 import json
+import os
 import threading
 import time
 import uuid
@@ -69,6 +71,11 @@ class EvaluationManager:
         self.orchestrator = orchestrator
         self.comparison_engine = comparison_engine
         self._evaluations: Dict[str, EvaluationJob] = {}
+        # Persist completed evaluations to disk (bind-mounted /shared) so the
+        # in-memory store survives container restarts, and historical results
+        # can be imported. Loaded on startup.
+        self._persist_dir = os.environ.get('FALLFW_EVAL_PERSIST_DIR', '/shared/_evaluations')
+        self._load_persisted()
 
     def create_evaluation(self, dataset_name: str,
                           detector_names: List[str],
@@ -315,6 +322,8 @@ class EvaluationManager:
             job.status = 'failed'
         else:
             job.status = 'partial'
+
+        self._save(job)   # persist so it survives restarts
 
         # Cleanup copied files
         self.dataset_manager.cleanup_evaluation(job.eval_id)
@@ -580,6 +589,114 @@ class EvaluationManager:
 
     def list_evaluations(self) -> List[Dict]:
         return [job.get_summary() for job in self._evaluations.values()]
+
+    # --- persistence (survives restarts) -------------------------------------
+    def _load_persisted(self):
+        try:
+            if not os.path.isdir(self._persist_dir):
+                return
+            for fn in sorted(os.listdir(self._persist_dir)):
+                if not fn.endswith('.json'):
+                    continue
+                try:
+                    with open(os.path.join(self._persist_dir, fn), encoding='utf-8') as f:
+                        job = EvaluationJob.from_dict(json.load(f))
+                    self._evaluations[job.eval_id] = job
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    def _save(self, job: EvaluationJob):
+        try:
+            os.makedirs(self._persist_dir, exist_ok=True)
+            tmp = os.path.join(self._persist_dir, f'.{job.eval_id}.tmp')
+            final = os.path.join(self._persist_dir, f'{job.eval_id}.json')
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(job.to_dict(), f)
+            os.replace(tmp, final)
+        except Exception:
+            pass
+
+    # --- import a completed evaluation from per-clip rows (CSV export format)
+    # Rebuilds the result 1:1 using the same summary code as a real run, so the
+    # gateway/UI cannot tell it apart from a live evaluation.
+    def import_evaluation(self, dataset_name: str, detector_name: str, rows: List[Dict],
+                          verdict_config: Optional[Dict] = None, eval_id: Optional[str] = None,
+                          created_at: Optional[str] = None, completed_at: Optional[str] = None) -> Dict:
+        eval_id = eval_id or 'eval-imp-' + hashlib.md5(
+            f'{dataset_name}|{detector_name}'.encode()).hexdigest()[:8]
+        vc = {
+            'min_fall_frames': (verdict_config or {}).get('min_fall_frames', 1),
+            'min_fall_percentage': (verdict_config or {}).get('min_fall_percentage', 0.0),
+        }
+
+        def _num(v, default=0):
+            try:
+                return type(default)(float(v))
+            except (TypeError, ValueError):
+                return default
+
+        file_results = []
+        for r in rows:
+            gt_label = r.get('ground_truth') or r.get('ground_truth_label') or 'UNLABELED'
+            gt_fall = True if gt_label == 'FALL' else (False if gt_label == 'ADL' else None)
+            ff = _num(r.get('fall_frames', r.get('detector_fall_frame_count')), 0)
+            tot = _num(r.get('total_frames', r.get('detector_total_frames')), 0)
+            conf = r.get('confidence', r.get('detector_confidence'))
+            conf = float(conf) if conf not in (None, '', 'None') else None
+            # Derive the verdict from fall_frames at the configured threshold —
+            # the same rule a real run uses — NOT the CSV's verdict column, which
+            # may have been written at an inconsistent threshold (e.g. event-type
+            # detectors collapse). This keeps imports 1:1 with a live evaluation.
+            fall_pct = (ff / tot) if tot else 0.0
+            verdict = (ff >= vc['min_fall_frames']) and (fall_pct >= vc['min_fall_percentage'])
+            match = (gt_fall == verdict) if gt_fall is not None else None
+            cls = None
+            if gt_fall is not None:
+                cls = ('TP' if (gt_fall and verdict) else 'TN' if (not gt_fall and not verdict)
+                       else 'FP' if (not gt_fall and verdict) else 'FN')
+            file_results.append(EvaluationFileResult(
+                filename=r.get('filename', ''), ground_truth_label=gt_label,
+                ground_truth_fall=gt_fall, detector_verdict=verdict, detector_confidence=conf,
+                detector_fall_frame_count=ff, detector_total_frames=tot,
+                detector_fall_percentage=round(ff / tot, 4) if tot else 0.0,
+                match=match, classification=cls,
+                processing_time_ms=_num(r.get('processing_time_ms'), 0),
+            ))
+
+        summary = self._compute_detector_summary(detector_name, file_results)
+        overall = self._compute_overall_statistics([summary])
+        manifest = self.dataset_manager._datasets.get(dataset_name)
+        gtt = manifest.ground_truth_type if manifest else 'video_level'
+        total_in = len(manifest.files) if manifest else len(file_results)
+        partial = total_in > len(file_results)
+        status = 'partial' if partial else 'completed'
+        now = datetime.utcnow().isoformat()
+        created_at = created_at or now
+        completed_at = completed_at or now
+
+        result = EvaluationResult(
+            eval_id=eval_id, dataset_name=dataset_name, ground_truth_type=gtt,
+            total_files_evaluated=len(file_results), total_files_in_dataset=total_in,
+            selected_files=[fr.filename for fr in file_results], verdict_config=vc,
+            detector_summaries=[summary], cross_detector_agreement=None,
+            overall_statistics=overall, created_at=created_at, completed_at=completed_at,
+            total_wall_time_seconds=None, status=status,
+        )
+        job = EvaluationJob(
+            eval_id=eval_id, dataset_name=dataset_name, detector_names=[detector_name],
+            selected_files=result.selected_files, config=None, verdict_config=vc,
+            status=status, total_tasks=(total_in if partial else len(file_results)),
+            completed_tasks=len(file_results),
+            failed_tasks=(total_in - len(file_results)) if partial else 0,
+            created_at=created_at, completed_at=completed_at,
+        )
+        job.result = result
+        self._evaluations[eval_id] = job
+        self._save(job)
+        return {'eval_id': eval_id, 'dataset': dataset_name, 'detector': detector_name,
+                'clips': len(file_results), 'status': status, 'f1': summary.f1_score}
 
     # --- live progress (per-detector) + SSE stream ---------------------------
     # NOTE: powers the redesigned UI's live cockpit. New endpoints — they take
