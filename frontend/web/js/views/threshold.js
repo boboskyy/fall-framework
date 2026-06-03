@@ -65,12 +65,24 @@ export async function render(root, params) {
 
   qs('#ds-sel', el).addEventListener('change', e => go(href('/threshold', { ds: e.target.value }).slice(1)));
 
+  const hidden = new Set();   // detectors toggled off via the legend
   const drawCurve = (k) => {
+    series.forEach((s, i) => { s.hidden = hidden.has(i); });
     qs('#curve', el).innerHTML = lineChart(series, {
       xDomain: [1, MAX_THRESHOLD], yDomain: [0, 1], xLabel: 'threshold', yLabel: 'F1', marker: k,
     });
     qs('#legend', el).innerHTML = series.map((s, i) =>
-      `<span class="it"><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
+      `<span class="it ${hidden.has(i) ? 'off' : ''}" data-i="${i}"><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
+    const lines = [...qs('#curve', el).querySelectorAll('polyline.ln')];
+    qsa('#legend .it', el).forEach(it => {
+      const i = +it.dataset.i;
+      it.addEventListener('mouseenter', () => lines.forEach(p => {
+        p.style.opacity = (+p.dataset.i === i) ? '1' : '0.12';
+        p.style.strokeWidth = (+p.dataset.i === i) ? '2.6' : '1';
+      }));
+      it.addEventListener('mouseleave', () => lines.forEach(p => { p.style.opacity = ''; p.style.strokeWidth = '1.6'; }));
+      it.addEventListener('click', () => { hidden.has(i) ? hidden.delete(i) : hidden.add(i); drawCurve(+qs('#thr', el).value); });
+    });
   };
 
   const drawLb = (k) => {

@@ -41,12 +41,13 @@ export function lineChart(series, {
     const x = sx(marker);
     g += `<line class="axis-solid" x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t + ih}" stroke="#3b82f6" stroke-dasharray="3 2"/>`;
   }
-  // lines
-  for (const s of series) {
-    if (s.hidden) continue;
+  // lines — set stroke via INLINE STYLE so it beats the `.chart .ln` stylesheet
+  // rule (a stylesheet wins over an SVG presentation attribute).
+  series.forEach((s, i) => {
     const pts = s.points.map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' ');
-    g += `<polyline class="ln ${s.best ? 'best' : ''}" points="${pts}" stroke="${s.color}"/>`;
-  }
+    g += `<polyline class="ln ${s.best ? 'best' : ''}" data-i="${i}" points="${pts}" `
+       + `style="stroke:${s.color};stroke-width:1.6${s.hidden ? ';display:none' : ''}"/>`;
+  });
   if (yLabel) g += `<text x="4" y="${pad.t + 8}" fill="#8a8a93">${esc(yLabel)}</text>`;
   if (xLabel) g += `<text x="${w - pad.r}" y="${h - 2}" text-anchor="end" fill="#8a8a93">${esc(xLabel)}</text>`;
   return `<svg class="chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${g}</svg>`;
