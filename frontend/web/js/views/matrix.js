@@ -39,7 +39,7 @@ export async function render(root) {
   const allV = dets.flatMap(n => datasets.map(d => cell[n][d]?.f1).filter(v => v != null));
   const minV = Math.min(...allV), maxV = Math.max(...allV);
   const norm = (v) => maxV > minV ? (v - minV) / (maxV - minV) : 0.5;
-  const heat = (v) => v == null ? 'var(--panel-2)' : `rgba(255,255,255,${(0.10 + norm(v) * 0.62).toFixed(3)})`;
+  const heat = (v) => v == null ? 'var(--panel-2)' : `rgba(59,130,246,${(0.12 + norm(v) * 0.74).toFixed(3)})`;
 
   // leaders per dataset (thesis signal)
   const leaders = datasets.map(d => {
@@ -48,7 +48,7 @@ export async function render(root) {
   });
   const uniqueLeaders = new Set(leaders.map(l => l.det)).size;
 
-  const head = `<tr><th></th>${datasets.map(d =>
+  const head = `<tr><th class="mtx-fam"></th><th class="mtx-name"></th>${datasets.map(d =>
     `<th><a href="${href('/', { ds: d })}">${esc(dsLabel(d))}</a></th>`).join('')}<th>⌀ ${esc(t('lab_avgf1'))}</th></tr>`;
 
   const rows = dets.map(n => {
@@ -58,14 +58,15 @@ export async function render(root) {
       if (!c) return `<td class="cell empty" title="not evaluated">–</td>`;
       const rk = c.rank <= 3 ? `<span class="sup">${roman(c.rank)}</span>` : '';
       const link = c.evalId ? href('/eval', { id: c.evalId }) : href('/', { ds: d });
-      return `<td class="cell" style="background:${heat(c.f1)};${c.rank === 1 ? 'outline:1px solid var(--accent);' : ''}"
+      return `<td class="cell" style="background:${heat(c.f1)};${c.rank === 1 ? 'outline:2px solid var(--accent);outline-offset:-2px;' : ''}"
         title="${esc(shortName(n))} · ${esc(dsLabel(d))} = F1 ${dec(c.f1)} (rank ${roman(c.rank)})">
-        <a href="${link}">${dec(c.f1, 2)}${rk}</a></td>`;
+        <a href="${link}"><span class="val">${dec(c.f1, 2)}</span>${rk}</a></td>`;
     }).join('');
     return `<tr>
-      <th style="text-align:right"><a href="${href('/detectors', { name: n })}"><span class="fam" style="margin-right:.4rem">${family(n)}</span>${esc(shortName(n))}</a></th>
+      <th class="mtx-fam"><a href="${href('/detectors', { name: n })}"><span class="fam">${family(n)}</span></a></th>
+      <th class="mtx-name"><a href="${href('/detectors', { name: n })}">${esc(shortName(n))}</a></th>
       ${cells}
-      <td class="cell mean" style="background:${heat(mean)}" title="mean F1 = ${dec(mean)}"><strong>${dec(mean, 2)}</strong></td>
+      <td class="cell mean" style="background:${heat(mean)}" title="mean F1 = ${dec(mean)}"><span class="val">${dec(mean, 2)}</span></td>
     </tr>`;
   }).join('');
 

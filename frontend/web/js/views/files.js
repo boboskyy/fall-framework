@@ -95,6 +95,41 @@ export async function render(root, params) {
   qs('#ds-sel', el).addEventListener('change', e => go(href('/files', { ds: e.target.value }).slice(1)));
 
   let sortK = 'filename', sortDir = 1, filter = 'all', detFilter = focusDet || '';
+  let lastData = [];
+  const evalIdByDet = Object.fromEntries(lb.rows.map(r => [r.name, r.evalId]));
+
+  // expanded detail (fall mini-timeline = fall-frame density; exact frame
+  // positions aren't stored, so this is a ratio bar that also reveals
+  // event-vs-sustained at a glance).
+  function expandHtml(r) {
+    const tot = r.total_frames || 0, ff = r.fall_frames || 0;
+    const pct = tot ? ff / tot * 100 : 0;
+    const kind = ff === 0 ? 'no fall frames' : ff <= 2 ? 'event (1–2 fall frames)' : 'sustained';
+    const wrong = r.classification === 'FP' || r.classification === 'FN';
+    const evalId = evalIdByDet[r.detName];
+    return `<div class="exp">
+      <div class="row between">
+        <span class="panel-h" style="margin:0">${esc(r.filename)}</span>
+        <span class="btn-row">
+          ${evalId ? `<a class="btn ghost sm" href="${href('/eval', { id: evalId })}">eval →</a>` : ''}
+          <a class="btn ghost sm" href="${href('/detectors', { name: r.detName })}">detector →</a>
+        </span>
+      </div>
+      <div class="mt">
+        <div class="bar tall"><div class="fill ${wrong ? 'bad' : ''}" style="width:${pct.toFixed(1)}%"></div></div>
+        <div class="tl-ax"><span>frame 0</span><span class="acc">${ff} fall / ${tot} frames · ${dec(ff / (tot || 1), 2)} density</span><span>${tot}</span></div>
+      </div>
+      <div class="exp-grid">
+        <div><div class="k">ground truth</div><div class="v">${esc(r.gt)}</div></div>
+        <div><div class="k">verdict</div><div class="v ${r.verdict === 'FALL' ? 'acc' : 'dim'}">${esc(r.verdict)}</div></div>
+        <div><div class="k">class</div><div class="v"><span class="cls ${r.classification || 'dim'}">${esc(r.classification || '·')}</span></div></div>
+        <div><div class="k">signal</div><div class="v">${esc(kind)}</div></div>
+        <div><div class="k">confidence</div><div class="v">${r.confidence != null ? dec(r.confidence, 3) : '–'}</div></div>
+        <div><div class="k">processing</div><div class="v">${r.time} ms</div></div>
+      </div>
+      <p class="muted-note mt">${esc(t('density_note'))}</p>
+    </div>`;
+  }
 
   function view() {
     let data = flat.filter(r => {
@@ -108,7 +143,8 @@ export async function render(root, params) {
       if (typeof x === 'number') return (x - y) * sortDir;
       return String(x).localeCompare(String(y)) * sortDir;
     });
-    qs('#tb', el).innerHTML = data.slice(0, 1500).map(r => `<tr>
+    lastData = data;
+    qs('#tb', el).innerHTML = data.slice(0, 1500).map((r, i) => `<tr class="clip-row" data-i="${i}">
       <td class="mono">${esc(r.filename)}</td>
       <td><span class="badge ${r.gt === 'FALL' ? 'warn' : 'muted'}">${esc(r.gt)}</span></td>
       <td class="mono">${esc(r.detector)}</td>
@@ -120,6 +156,21 @@ export async function render(root, params) {
     </tr>`).join('');
     qs('#cnt', el).textContent = `· ${data.length} rows`;
   }
+
+  // expand/collapse a row on click (event delegation; #tb persists across view())
+  qs('#tb', el).addEventListener('click', (e) => {
+    const tr = e.target.closest('tr.clip-row');
+    if (!tr) return;
+    const nxt = tr.nextElementSibling;
+    if (nxt && nxt.classList.contains('exp-row')) { nxt.remove(); tr.classList.remove('open'); return; }
+    const r = lastData[+tr.dataset.i];
+    if (!r) return;
+    const exp = document.createElement('tr');
+    exp.className = 'exp-row';
+    exp.innerHTML = `<td colspan="9">${expandHtml(r)}</td>`;
+    tr.after(exp);
+    tr.classList.add('open');
+  });
 
   qsa('#tbl th', el).forEach(th => th.addEventListener('click', () => {
     const k = th.dataset.k; if (!k) return;
