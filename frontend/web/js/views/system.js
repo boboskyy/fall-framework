@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { getDatasets } from '../store.js';
 import { shortName, family, dsLabel } from '../format.js';
 import { qs, qsa, esc, spinner, healthBadge, toast } from '../components.js';
+import { isPreview } from '../config.js';
 import { t } from '../i18n.js';
 
 export async function render(root) {
@@ -28,11 +29,11 @@ export async function render(root) {
           <div class="muted-note mt" style="margin-top:.5rem">
             ${esc(x.category || '')} · :${x.port} · ${x.requires_gpu ? 'gpu' : 'cpu'}${x.device ? ' (' + esc(x.device) + ')' : ''}
           </div>
-          <div class="btn-row mt">
+          ${isPreview() ? '' : `<div class="btn-row mt">
             <button class="btn sm" data-act="start">${esc(t('start_c'))}</button>
             <button class="btn sm ghost" data-act="stop">${esc(t('stop_c'))}</button>
             <button class="btn sm ghost" data-act="build">${esc(t('build_c'))}</button>
-          </div>
+          </div>`}
         </div>`).join('') + `</div>`;
 
       qsa('[data-act]', grid).forEach(b => b.addEventListener('click', async () => {

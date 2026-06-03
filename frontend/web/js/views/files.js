@@ -5,6 +5,7 @@ import { getEvals, leaderboard, perFileMatrix, invalidate } from '../store.js';
 import { dsLabel, shortName, family, dec, pct, ALL_DS } from '../format.js';
 import { qs, qsa, esc, spinner, empty, download, toast } from '../components.js';
 import { watchEvaluation } from '../live.js';
+import { isPreview } from '../config.js';
 import { t } from '../i18n.js';
 import { href, go } from '../router.js';
 
@@ -115,10 +116,10 @@ export async function render(root, params) {
       <div class="row between">
         <span class="panel-h" style="margin:0">${esc(r.filename)}</span>
         <span class="btn-row">
-          ${detHealth[r.detName] === 'healthy'
-            ? `<button class="btn sm rerun">⟳ rerun</button>`
-            : `<button class="btn sm" disabled title="detector not healthy — start it in System">⟳ rerun (down)</button>`}
-          <span class="rerun-status dim mono"></span>
+          ${isPreview() ? ''
+            : detHealth[r.detName] === 'healthy'
+              ? `<button class="btn sm rerun">⟳ rerun</button><span class="rerun-status dim mono"></span>`
+              : `<button class="btn sm" disabled title="detector not healthy — start it in System">⟳ rerun (down)</button>`}
           ${evalId ? `<a class="btn ghost sm" href="${href('/eval', { id: evalId })}">eval →</a>` : ''}
           <a class="btn ghost sm" href="${href('/detectors', { name: r.detName })}">detector →</a>
         </span>

@@ -31,6 +31,7 @@ async function req(path, opts = {}) {
 
 export const api = {
   base: BASE,
+  config: () => req('/config'),
   // health / detectors
   health: () => req('/health'),
   detectors: (refresh = false) => req('/detectors' + (refresh ? '?refresh=true' : '')),

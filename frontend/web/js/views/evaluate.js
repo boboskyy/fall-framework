@@ -6,6 +6,7 @@ import { dsLabel, shortName, family, dec, ago } from '../format.js';
 import { stripedBar } from '../charts.js';
 import { qs, qsa, esc, spinner, empty, toast, healthBadge } from '../components.js';
 import { watchEvaluation } from '../live.js';
+import { isPreview } from '../config.js';
 import { t } from '../i18n.js';
 import { href, go } from '../router.js';
 
@@ -18,6 +19,17 @@ export async function render(root, params) {
     <p class="page-sub">${esc(t('eval_sub'))}</p>
     <div id="ev">${spinner('…')}</div>`;
   const el = qs('#ev', root);
+
+  // preview / read-only: no launch form, just the banner + history
+  if (isPreview()) {
+    el.innerHTML = `<div class="live-banner flat section"><div class="live-head">
+        <span class="badge warn"><span class="dotled"></span>${esc(t('preview'))}</span>
+        <span>${esc(t('preview_eval'))}</span></div></div>
+      <div class="section"><h2 class="sec-h">${esc(t('nav_evaluate'))} — history<span class="rule"></span></h2>
+        <div id="hist">${spinner('…')}</div></div>`;
+    loadHistory();
+    return;
+  }
 
   let datasets, dets;
   try {

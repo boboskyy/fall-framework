@@ -31,6 +31,7 @@ const DICT = {
     system_h: 'System — kontenery i brama', start_c: 'Start', stop_c: 'Stop', build_c: 'Build',
     select_detectors: 'Wybierz detektory', select_all: 'wszystkie', clear: 'wyczyść',
     metric: 'Metryka', value: 'Wartość',
+    preview: 'podgląd · read-only', preview_eval: 'Tryb podglądu — uruchamianie ewaluacji wyłączone na tej instancji (publiczny hosting). Wyniki i analizy są w pełni dostępne.',
   },
   en: {
     nav_lab: 'Lab', nav_threshold: 'Threshold', nav_diversity: 'Diversity',
@@ -62,6 +63,7 @@ const DICT = {
     system_h: 'System — containers & gateway', start_c: 'Start', stop_c: 'Stop', build_c: 'Build',
     select_detectors: 'Select detectors', select_all: 'all', clear: 'clear',
     metric: 'Metric', value: 'Value',
+    preview: 'preview · read-only', preview_eval: 'Preview mode — launching evaluations is disabled on this instance (public hosting). Results and analysis are fully available.',
   },
 };
 

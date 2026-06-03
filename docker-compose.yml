@@ -15,6 +15,9 @@ services:
       - FLASK_ENV=production
       - FALLFW_REPO_URL=https://github.com/boboskyy/fall-detector-repos/releases/download/v1.0/
       - FALLFW_DATASET_REGISTRY_URL=https://github.com/boboskyy/fall-detector-repos/releases/download/datasets-v1/datasets_registry.json
+      # Preview / read-only mode for public hosting (VPS): set to 1 to disable
+      # detection / evaluation / rerun / builds. Browsing + results stay live.
+      - FALLFW_PREVIEW=${FALLFW_PREVIEW:-0}
     networks:
       - fall-detection
     healthcheck:
@@ -74,6 +77,13 @@ services:
       - MPLBACKEND=Agg
     networks:
       - fall-detection
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -94,6 +104,13 @@ services:
       - MPLBACKEND=Agg
     networks:
       - fall-detection
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -136,6 +153,13 @@ services:
       - YOLO_VERBOSE=false
     networks:
       - fall-detection
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -176,6 +200,13 @@ services:
       - YOLO_VERBOSE=false
     networks:
       - fall-detection
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -187,6 +218,8 @@ services:
     build:
       context: .
       dockerfile: detectors/yb_class_fall/Dockerfile
+      args:
+        DEVICE: gpu
     ports:
       - "3008:5000"
     volumes:
@@ -195,6 +228,13 @@ services:
       - FLASK_ENV=production
     networks:
       - fall-detection
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -216,6 +256,13 @@ services:
       - YOLO_VERBOSE=false
     networks:
       - fall-detection
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -237,12 +284,49 @@ services:
       - YOLO_VERBOSE=false
     networks:
       - fall-detection
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  gajuuzz-stgcn:
+    build:
+      context: .
+      dockerfile: detectors/gajuuzz_stgcn/Dockerfile
+      args:
+        DEVICE: gpu
+    ports:
+      - "3011:5000"
+    volumes:
+      - ./shared:/shared:ro
+    environment:
+      - FLASK_ENV=production
+      - NVIDIA_VISIBLE_DEVICES=all
+      - MPLBACKEND=Agg
+    networks:
+      - fall-detection
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
 
 volumes:
   shared:

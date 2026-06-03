@@ -18,8 +18,27 @@ from gateway.evaluation_manager import EvaluationManager
 
 
 def create_gateway_app():
+    import os
     app = Flask(__name__)
     CORS(app)
+
+    # Preview / read-only mode (for public VPS hosting): keep all browsing +
+    # results, but block anything that runs detectors or mutates state
+    # (detection, evaluation, rerun, build, download, upload, start/stop...).
+    # Toggle with env FALLFW_PREVIEW=1. No rebuild needed to flip it.
+    PREVIEW = os.environ.get('FALLFW_PREVIEW', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+
+    @app.before_request
+    def _preview_guard():
+        if PREVIEW and request.method not in ('GET', 'HEAD', 'OPTIONS'):
+            return jsonify({
+                'error': 'PREVIEW_MODE',
+                'message': 'Read-only preview: detection, evaluation, rerun and container actions are disabled.',
+            }), 403
+
+    @app.route('/api/v1/config', methods=['GET'])
+    def get_config():
+        return jsonify({'preview': PREVIEW, 'version': '2.0.0'})
 
     registry = DetectorRegistry()
     registry.scan_manifests()

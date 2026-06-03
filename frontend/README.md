@@ -68,16 +68,39 @@ docker compose up -d --no-deps frontend     # --no-deps => never touches gateway
 # app on http://localhost:2999
 ```
 
-## Live channel (SSE) - staged, deploy when ready
+## Live channel (SSE)
 
-A Server-Sent Events channel for live evaluation progress is implemented in the
-gateway (`/api/v1/evaluate/<id>/stream`) plus a per-detector
-`/api/v1/evaluate/<id>/progress` endpoint. **These are staged, not deployed** -
-activating them requires rebuilding the gateway, which **wipes its in-memory
-evaluation stats**. Until then the UI is fully live via `/status` polling
-(`live.js` prefers SSE and falls back automatically). Redeploy the gateway only
-when you're ready to lose the current in-memory history:
+Live evaluation progress streams over SSE (`/api/v1/evaluate/<id>/stream`, plus a
+per-detector `/api/v1/evaluate/<id>/progress`). `live.js` prefers SSE and falls
+back to `/status` polling automatically.
+
+## Persistence (evals survive restarts)
+
+The gateway persists every completed/imported evaluation to
+`/shared/_evaluations/*.json` (bind-mounted to `fall-framework/shared/_evaluations/`)
+and reloads them on startup. So restarting/recreating the gateway **no longer
+wipes the eval stats** - they come back from disk.
+
+To seed a fresh machine with existing results, copy that folder over before
+starting (or run `magisterka/badania/skrypty/wczytaj_wyniki_do_gatewaya.py`
+against a writable instance).
+
+## Preview / read-only mode (public VPS hosting)
+
+Set **`FALLFW_PREVIEW=1`** on the gateway to host the whole app publicly while
+blocking anything that runs detectors or mutates state - detection, evaluation,
+per-clip **rerun**, builds, downloads, container start/stop, dataset upload.
+Browsing and all results/analysis stay fully live; the UI shows a `preview ·
+read-only` badge and hides the disabled controls (it auto-detects via
+`/api/v1/config`). No rebuild needed to flip it.
 
 ```bash
-docker compose up -d --build gateway   # ⚠ clears in-memory eval stats
+# enable (read-only):
+FALLFW_PREVIEW=1 docker compose up -d gateway
+# disable (full functionality):
+FALLFW_PREVIEW=0 docker compose up -d gateway
 ```
+
+Typical VPS deploy: copy `shared/_evaluations/` (your results) to the box, then
+`FALLFW_PREVIEW=1 docker compose up -d gateway frontend` - no detector containers
+needed, so the VPS isn't hammered with builds or CPU inference.

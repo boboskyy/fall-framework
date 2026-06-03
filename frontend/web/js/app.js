@@ -2,6 +2,7 @@
 import { route, start, onChange, href, parse, setNotFound } from './router.js';
 import { t, lang, setLang, onLang } from './i18n.js';
 import { api } from './api.js';
+import { loadConfig, isPreview } from './config.js';
 import { qs, qsa, esc, healthBadge } from './components.js';
 
 import * as lab from './views/lab.js';
@@ -31,6 +32,7 @@ function shell() {
       <a class="brand" href="${href('/')}"><span class="p">&gt;_</span>fallfw<span class="slash">/</span><span class="seg" id="brand-seg">lab</span></a>
       <nav class="nav" id="nav"></nav>
       <div class="topbar-right">
+        <span id="preview-badge"></span>
         <div class="lang" id="lang">
           <button data-l="pl">PL</button><span class="sep">/</span><button data-l="en">EN</button>
         </div>
@@ -77,6 +79,10 @@ function renderNav() {
     `<a href="${href(n.path)}" class="${n.path === cur ? 'active' : ''}">${esc(t(n.key))}</a>`).join('');
 }
 function syncLang() { qsa('#lang button').forEach(b => b.classList.toggle('active', b.dataset.l === lang())); }
+function renderPreviewBadge() {
+  const el = qs('#preview-badge');
+  if (el) el.innerHTML = isPreview() ? `<span class="badge warn"><span class="dotled"></span>${esc(t('preview'))}</span>` : '';
+}
 
 function setDrawer(open) {
   document.body.classList.toggle('drawer-open', open);
@@ -135,12 +141,12 @@ setNotFound((p) => {
 });
 
 onChange(() => { renderNav(); if (document.body.classList.contains('drawer-open')) setDrawer(false); });
-onLang(() => { renderNav(); syncLang(); refreshSysbar(); const { path, params } = parse();
+onLang(() => { renderNav(); syncLang(); renderPreviewBadge(); refreshSysbar(); const { path, params } = parse();
   const r = { '/': lab, '/threshold': threshold, '/diversity': diversity, '/files': files,
               '/matrix': matrix, '/evaluate': evaluate, '/eval': evalView, '/detectors': detectors, '/datasets': datasets }[path];
   if (r) bind(r)(params); });
 
 shell();
-start();
+(async () => { await loadConfig(); renderPreviewBadge(); start(); })();
 refreshSysbar();
 setInterval(refreshSysbar, 15000);

@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { shortName, family, FAMILY_LABEL, dsLabel, dec, pct, ms } from '../format.js';
 import { qs, qsa, esc, spinner, empty, healthBadge, toast } from '../components.js';
 import { stripedBar } from '../charts.js';
+import { isPreview } from '../config.js';
 import { t } from '../i18n.js';
 import { href } from '../router.js';
 
@@ -13,24 +14,26 @@ export async function render(root, params) {
   root.innerHTML = `<div class="eyebrow"><span class="n">04</span>${esc(t('detectors_h'))}</div>
     <h1 class="page-h"><span class="hash">#</span>${esc(t('detectors_h'))}</h1>
     <p class="page-sub" id="d-sub">6 rodzin algorytmicznych (A–F)</p>
-    <div class="btn-row mb">
+    ${isPreview() ? '' : `<div class="btn-row mb">
       <button class="btn ghost sm" id="rescan">${esc(t('rescan'))}</button>
       <input class="ipt" id="tpl-name" placeholder="new_detector_name" style="max-width:210px">
       <button class="btn sm" id="get-tpl">${esc(t('template'))}</button>
-    </div>
+    </div>`}
     <div id="d-body">${spinner('…')}</div>`;
   const body = qs('#d-body', root);
 
-  qs('#rescan', root).addEventListener('click', async (e) => {
-    e.target.disabled = true; e.target.textContent = '…';
-    try { await api.rescanDetectors(); toast('detectors rescanned', 'ok'); render(root, params); }
-    catch (err) { toast(err.message || err, 'err'); e.target.disabled = false; e.target.textContent = t('rescan'); }
-  });
-  qs('#get-tpl', root).addEventListener('click', () => {
-    const name = qs('#tpl-name', root).value.trim();
-    if (!/^[a-z0-9_]+$/.test(name)) { toast('name: lowercase letters, digits, underscore', 'err'); return; }
-    window.open(api.templateUrl(name), '_blank');
-  });
+  if (!isPreview()) {
+    qs('#rescan', root).addEventListener('click', async (e) => {
+      e.target.disabled = true; e.target.textContent = '…';
+      try { await api.rescanDetectors(); toast('detectors rescanned', 'ok'); render(root, params); }
+      catch (err) { toast(err.message || err, 'err'); e.target.disabled = false; e.target.textContent = t('rescan'); }
+    });
+    qs('#get-tpl', root).addEventListener('click', () => {
+      const name = qs('#tpl-name', root).value.trim();
+      if (!/^[a-z0-9_]+$/.test(name)) { toast('name: lowercase letters, digits, underscore', 'err'); return; }
+      window.open(api.templateUrl(name), '_blank');
+    });
+  }
 
   let dets, summary = [];
   try {

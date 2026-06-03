@@ -4,6 +4,7 @@ import { getDatasets, getEvals, getResults } from '../store.js';
 import { dsLabel, dec } from '../format.js';
 import { qs, qsa, esc, spinner, empty, toast } from '../components.js';
 import { stripedBar } from '../charts.js';
+import { isPreview } from '../config.js';
 import { t } from '../i18n.js';
 import { href } from '../router.js';
 
@@ -12,7 +13,7 @@ export async function render(root, params) {
 
   root.innerHTML = `<div class="eyebrow"><span class="n">05</span>${esc(t('datasets_h'))}</div>
     <h1 class="page-h"><span class="hash">#</span>${esc(t('datasets_h'))}</h1>
-    <div class="btn-row mb">
+    ${isPreview() ? '' : `<div class="btn-row mb">
       <button class="btn sm" id="add-ds">+ ${esc(t('add_dataset'))}</button>
       <button class="btn ghost sm" id="refresh-reg">${esc(t('refresh_registry'))}</button>
     </div>
@@ -24,30 +25,32 @@ export async function render(root, params) {
         <button class="btn sm" id="do-upload">${esc(t('upload_zip'))}</button>
       </div>
       <div class="muted-note mt">.zip z podfolderami <span class="mono">fall/</span> i <span class="mono">adl/</span> (lub manifestem datasetu).</div>
-    </div>
+    </div>`}
     <div id="ds-body">${spinner('…')}</div>`;
   const body = qs('#ds-body', root);
 
-  qs('#add-ds', root).addEventListener('click', () => {
-    const p = qs('#add-panel', root);
-    p.style.display = p.style.display === 'none' ? 'block' : 'none';
-  });
-  qs('#refresh-reg', root).addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    try { await api.refreshRegistry(); await getDatasets(true); toast('registry refreshed', 'ok'); render(root, params); }
-    catch (err) { toast(err.message || err, 'err'); e.target.disabled = false; }
-  });
-  qs('#do-upload', root).addEventListener('click', async () => {
-    const f = qs('#ds-file', root).files[0];
-    if (!f) { toast('Choose a .zip file', 'err'); return; }
-    const btn = qs('#do-upload', root); btn.disabled = true; btn.textContent = '…';
-    try {
-      await api.uploadDataset(f, qs('#ds-name', root).value.trim() || undefined);
-      await getDatasets(true);
-      toast('dataset uploaded', 'ok');
-      render(root, params);
-    } catch (err) { toast(err.message || err, 'err'); btn.disabled = false; btn.textContent = t('upload_zip'); }
-  });
+  if (!isPreview()) {
+    qs('#add-ds', root).addEventListener('click', () => {
+      const p = qs('#add-panel', root);
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    });
+    qs('#refresh-reg', root).addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try { await api.refreshRegistry(); await getDatasets(true); toast('registry refreshed', 'ok'); render(root, params); }
+      catch (err) { toast(err.message || err, 'err'); e.target.disabled = false; }
+    });
+    qs('#do-upload', root).addEventListener('click', async () => {
+      const f = qs('#ds-file', root).files[0];
+      if (!f) { toast('Choose a .zip file', 'err'); return; }
+      const btn = qs('#do-upload', root); btn.disabled = true; btn.textContent = '…';
+      try {
+        await api.uploadDataset(f, qs('#ds-name', root).value.trim() || undefined);
+        await getDatasets(true);
+        toast('dataset uploaded', 'ok');
+        render(root, params);
+      } catch (err) { toast(err.message || err, 'err'); btn.disabled = false; btn.textContent = t('upload_zip'); }
+    });
+  }
   let ds, evals;
   try { ds = await getDatasets(); evals = await getEvals(); }
   catch (e) { body.innerHTML = empty('error', e.message || e); return; }
