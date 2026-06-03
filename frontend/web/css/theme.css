@@ -367,9 +367,16 @@ table.tbl td.mono, table.tbl td .mono { font-family:var(--mono); }
 .heat td.cell.diag { color:var(--muted); opacity:.5; }
 .heat td.cell:hover { outline:1px solid var(--blue); z-index:2; }
 /* cross-dataset matrix needs roomier cells (values like "0,79 III") */
-.heat.mtx td.cell { width:auto; min-width:3.8rem; height:1.9rem; padding:.3rem .55rem; }
+.heat.mtx td.cell { width:auto; min-width:3.8rem; height:2rem; padding:.3rem .55rem; }
 .heat.mtx th { padding:.3rem .55rem; }
 .heat .sup { color:var(--accent); font-size:.78em; margin-left:.15em; }
+.heat a { color:inherit; text-decoration:none; border-bottom:none; display:block; }
+.heat th a { display:inline; }
+.heat th a:hover, .heat td.cell a:hover { color:var(--blue); }
+.heat td.cell.empty { background:var(--panel-2); color:var(--muted); }
+.heat td.cell.mean { border-left:2px solid var(--dot); color:var(--head); }
+.colorbar { width:120px; height:.55rem; border:1px solid var(--line);
+  background:linear-gradient(90deg, rgba(255,255,255,.10), rgba(255,255,255,.72)); }
 
 /* agreement strip: row=clip col=detector */
 .strip { display:grid; gap:1px; }
