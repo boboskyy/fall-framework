@@ -165,16 +165,14 @@ export async function render(root, params) {
     const h = qs('#hist', el);
     try {
       const evals = (await getEvals(true)).slice().reverse();
-      h.innerHTML = `<div class="panel"><div class="lb">` + evals.slice(0, 12).map(e => {
+      h.innerHTML = `<div class="panel">` + evals.slice(0, 12).map(e => {
         const cls = e.status === 'completed' ? 'ok' : e.status === 'failed' ? 'bad' : e.status === 'partial' ? 'warn' : 'muted';
-        return `<a class="lb-row" href="${href('/', { ds: e.dataset_name })}">
-          <div></div>
-          <div class="lb-name"><span class="nm">${esc(dsLabel(e.dataset_name))}</span>
-            <span class="dim mono" style="margin-left:.5rem">${e.detector_names.map(shortName).join(', ')}</span></div>
+        return `<a class="hist-row" href="${href('/', { ds: e.dataset_name })}">
+          <div class="nm">${esc(dsLabel(e.dataset_name))}<span class="det">${esc(e.detector_names.map(shortName).join(', '))}</span></div>
           <div><span class="badge ${cls}"><span class="dotled"></span>${esc(e.status)}</span></div>
-          <div class="lb-val dim">${e.completed_tasks}/${e.total_tasks} · ${ago(e.created_at)}</div>
+          <div class="meta">${e.completed_tasks}/${e.total_tasks} · ${ago(e.created_at)}</div>
         </a>`;
-      }).join('') + `</div></div>`;
+      }).join('') + `</div>`;
     } catch (e) { h.innerHTML = empty('error', e.message || e); }
   }
   loadHistory();

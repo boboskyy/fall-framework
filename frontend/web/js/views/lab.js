@@ -52,11 +52,11 @@ export async function render(root, params) {
       <div class="select">
         <select id="ds-sel">${opts}</select>
       </div>
-      <div class="tabs" style="border:none;margin:0">
-        <a href="${href('/threshold', { ds: ctx.ds })}">${esc(t('nav_threshold'))}</a>
-        <a href="${href('/diversity', { ds: ctx.ds })}">${esc(t('nav_diversity'))}</a>
-        <a href="${href('/files', { ds: ctx.ds })}">${esc(t('nav_files'))}</a>
-        <a href="${href('/matrix')}">${esc(t('nav_matrix'))}</a>
+      <div class="btn-row" id="lab-tabs">
+        <a class="btn ghost sm" href="${href('/threshold', { ds: ctx.ds })}">${esc(t('nav_threshold'))} →</a>
+        <a class="btn ghost sm" href="${href('/diversity', { ds: ctx.ds })}">${esc(t('nav_diversity'))} →</a>
+        <a class="btn ghost sm" href="${href('/files', { ds: ctx.ds })}">${esc(t('nav_files'))} →</a>
+        <a class="btn ghost sm" href="${href('/matrix')}">${esc(t('nav_matrix'))} →</a>
       </div>
     </div>
     <div id="lb-stats"></div>
