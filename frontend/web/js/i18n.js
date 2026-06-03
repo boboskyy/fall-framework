@@ -63,7 +63,7 @@ const DICT = {
   },
 };
 
-let _lang = (() => { try { return localStorage.getItem('fallfw_lang') || 'pl'; } catch { return 'pl'; } })();
+let _lang = (() => { try { return localStorage.getItem('fallfw_lang') || 'en'; } catch { return 'en'; } })();
 const _subs = new Set();
 
 export function lang() { return _lang; }
