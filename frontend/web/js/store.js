@@ -1,7 +1,7 @@
 // store.js — caches gateway data and reconstructs the multi-detector picture
 // from the single-detector evaluations the gateway actually stores.
 import { api } from './api.js';
-import { metricsFromCounts, family, shortName, classifyAt } from './format.js';
+import { metricsFromCounts, countsAtThreshold, family, shortName, classifyAt, ALL_DS } from './format.js';
 
 const cache = { datasets: null, evals: null, results: new Map() };
 
@@ -29,7 +29,45 @@ const score = (e) => (e.status === 'completed' ? 1e9 : 0) + (e.completed_tasks |
 
 // For a dataset, choose the best eval per detector (completed preferred, most
 // clips, latest), fetch results, and build merged leaderboard rows.
+export async function datasetsWithEvals() {
+  const evals = await getEvals();
+  return [...new Set(evals.filter(e => e.status === 'completed' || e.status === 'partial').map(e => e.dataset_name))];
+}
+
+// Overall mode: pool every evaluated clip across all datasets into one virtual
+// dataset. Filenames are namespaced by dataset so clips never collide.
+export async function overallLeaderboard() {
+  const datasets = await datasetsWithEvals();
+  const perDet = new Map();
+  let verdictConfig = null;
+  for (const ds of datasets) {
+    const lb = await leaderboard(ds);
+    verdictConfig = verdictConfig || lb.verdictConfig;
+    for (const row of lb.rows) {
+      if (!perDet.has(row.name)) perDet.set(row.name, { name: row.name, short: row.short, family: row.family, perFile: [], datasets: new Set() });
+      const agg = perDet.get(row.name);
+      agg.datasets.add(ds);
+      for (const r of row.perFile) agg.perFile.push({ ...r, filename: ds + '/' + r.filename });
+    }
+  }
+  const k = (verdictConfig && verdictConfig.min_fall_frames) || 1;
+  const rows = [];
+  for (const agg of perDet.values()) {
+    const m = countsAtThreshold(agg.perFile, k);
+    rows.push({
+      name: agg.name, short: agg.short, family: agg.family,
+      evalId: null, status: 'completed', ...m,
+      avgTime: null, perFile: agg.perFile, partial: false,
+      nDatasets: agg.datasets.size,
+      summary: { detector_name: agg.name, total_files: agg.perFile.length, per_file_results: agg.perFile },
+    });
+  }
+  rows.sort((a, b) => b.f1 - a.f1);
+  return { dataset: ALL_DS, rows, verdictConfig, evalsOnDataset: datasets.length, overall: true };
+}
+
 export async function leaderboard(dataset) {
+  if (dataset === ALL_DS) return overallLeaderboard();
   const evals = await getEvals();
   const onDs = evals.filter(e => e.dataset_name === dataset &&
                                  (e.status === 'completed' || e.status === 'partial'));

@@ -30,7 +30,9 @@ const DS_LABEL = {
   ur_fall_detection: 'URFD', gmdcsa24: 'GMDCSA-24',
   caucafall: 'CAUCAFall', mcfd: 'MCFD',
 };
-export const dsLabel = (n) => DS_LABEL[n] || n;
+export const ALL_DS = '__all__';   // overall mode: pool all evaluated clips
+export const dsLabel = (n) =>
+  n === ALL_DS ? (lang() === 'pl' ? 'wszystkie · overall' : 'all · overall') : (DS_LABEL[n] || n);
 
 /* ----- numbers ----- */
 export function dec(x, p = 3) {

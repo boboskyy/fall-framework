@@ -2,7 +2,7 @@
 // vectors, double-fault explorer, recall–FPR scatter (H3). Computed client-side
 // from per-clip verdicts.
 import { getEvals, leaderboard, kappa } from '../store.js';
-import { dsLabel, shortName, family, dec } from '../format.js';
+import { dsLabel, shortName, family, dec, ALL_DS } from '../format.js';
 import { kappaColor, scatter } from '../charts.js';
 import { qs, esc, spinner, empty } from '../components.js';
 import { t } from '../i18n.js';
@@ -18,7 +18,7 @@ export async function render(root, params) {
   const evals = await getEvals().catch(() => []);
   const list = [...new Set(evals.filter(e => e.status === 'completed' || e.status === 'partial').map(e => e.dataset_name))];
   if (!list.length) { el.innerHTML = empty(t('no_data'), t('no_evals_b')); return; }
-  const ds = (params.ds && list.includes(params.ds)) ? params.ds : list[0];
+  const ds = (params.ds === ALL_DS || (params.ds && list.includes(params.ds))) ? params.ds : list[0];
 
   const lb = await leaderboard(ds);
   const rows = lb.rows;
@@ -36,7 +36,8 @@ export async function render(root, params) {
     if (i < j) pairs.push({ a: rows[i], b: rows[j], k: r.k, df: r.df, n: r.n });
   }
 
-  const optHtml = list.map(d => `<option value="${d}" ${d === ds ? 'selected' : ''}>${esc(dsLabel(d))}</option>`).join('');
+  const optHtml = `<option value="${ALL_DS}" ${ds === ALL_DS ? 'selected' : ''}>${esc(dsLabel(ALL_DS))}</option>` +
+    list.map(d => `<option value="${d}" ${d === ds ? 'selected' : ''}>${esc(dsLabel(d))}</option>`).join('');
 
   // κ heatmap
   const head = `<tr><th></th>${rows.map(r => `<th class="rot">${esc(r.short)}</th>`).join('')}</tr>`;

@@ -1,7 +1,7 @@
 // views/files.js — per-clip results: agreement strip (hardest clips first),
 // filterable/sortable long-format table, merged CSV export.
 import { getEvals, leaderboard, perFileMatrix } from '../store.js';
-import { dsLabel, shortName, family, dec, pct } from '../format.js';
+import { dsLabel, shortName, family, dec, pct, ALL_DS } from '../format.js';
 import { qs, qsa, esc, spinner, empty, download } from '../components.js';
 import { t } from '../i18n.js';
 import { href, go } from '../router.js';
@@ -16,7 +16,7 @@ export async function render(root, params) {
   const evals = await getEvals().catch(() => []);
   const list = [...new Set(evals.filter(e => e.status === 'completed' || e.status === 'partial').map(e => e.dataset_name))];
   if (!list.length) { el.innerHTML = empty(t('no_data'), t('no_evals_b')); return; }
-  const ds = (params.ds && list.includes(params.ds)) ? params.ds : list[0];
+  const ds = (params.ds === ALL_DS || (params.ds && list.includes(params.ds))) ? params.ds : list[0];
   const focusDet = params.det || null;
 
   const lb = await leaderboard(ds);
@@ -27,7 +27,8 @@ export async function render(root, params) {
   const difficulty = (clip) => Object.values(clip.byDet).filter(r => r.classification === 'FP' || r.classification === 'FN').length;
   const clips = mat.clips.slice().sort((a, b) => difficulty(b) - difficulty(a));
 
-  const optHtml = list.map(d => `<option value="${d}" ${d === ds ? 'selected' : ''}>${esc(dsLabel(d))}</option>`).join('');
+  const optHtml = `<option value="${ALL_DS}" ${ds === ALL_DS ? 'selected' : ''}>${esc(dsLabel(ALL_DS))}</option>` +
+    list.map(d => `<option value="${d}" ${d === ds ? 'selected' : ''}>${esc(dsLabel(d))}</option>`).join('');
 
   // agreement strip: one row per detector, cells = clips (hardest first, capped)
   const STRIP_MAX = 160;

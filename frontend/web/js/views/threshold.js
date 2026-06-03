@@ -1,7 +1,7 @@
 // views/threshold.js — verdict-threshold sensitivity (H4). Everything recomputes
 // live from per-clip fall_frame_count; no re-evaluation.
 import { getEvals, leaderboard } from '../store.js';
-import { dsLabel, shortName, family, dec, countsAtThreshold, MAX_THRESHOLD } from '../format.js';
+import { dsLabel, shortName, family, dec, countsAtThreshold, MAX_THRESHOLD, ALL_DS } from '../format.js';
 import { stripedBar, lineChart, histogram, colorFor } from '../charts.js';
 import { qs, qsa, esc, spinner, empty } from '../components.js';
 import { t } from '../i18n.js';
@@ -10,7 +10,9 @@ import { href, go } from '../router.js';
 async function dsOptions(selected) {
   const evals = await getEvals();
   const list = [...new Set(evals.filter(e => e.status === 'completed' || e.status === 'partial').map(e => e.dataset_name))];
-  return { list, html: list.map(d => `<option value="${d}" ${d === selected ? 'selected' : ''}>${esc(dsLabel(d))}</option>`).join('') };
+  const html = `<option value="${ALL_DS}" ${selected === ALL_DS ? 'selected' : ''}>${esc(dsLabel(ALL_DS))}</option>` +
+    list.map(d => `<option value="${d}" ${d === selected ? 'selected' : ''}>${esc(dsLabel(d))}</option>`).join('');
+  return { list, html };
 }
 
 export async function render(root, params) {
@@ -22,7 +24,7 @@ export async function render(root, params) {
 
   const { list } = await dsOptions(params.ds);
   if (!list.length) { el.innerHTML = empty(t('no_data'), t('no_evals_b')); return; }
-  const ds = (params.ds && list.includes(params.ds)) ? params.ds : list[0];
+  const ds = (params.ds === ALL_DS || (params.ds && list.includes(params.ds))) ? params.ds : list[0];
   const opt = (await dsOptions(ds)).html;
 
   const lb = await leaderboard(ds);

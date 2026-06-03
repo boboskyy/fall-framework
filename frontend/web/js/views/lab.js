@@ -1,7 +1,7 @@
 // views/lab.js — Leaderboard Lab (landing). Per-dataset detector ranking
 // reconstructed from the gateway's single-detector evaluations.
 import { getDatasets, getEvals, leaderboard, bestPerMetric } from '../store.js';
-import { dsLabel, dec, pct, roman, FAMILY_LABEL } from '../format.js';
+import { dsLabel, dec, pct, roman, FAMILY_LABEL, ALL_DS } from '../format.js';
 import { stripedBar } from '../charts.js';
 import { qs, qsa, spinner, empty, esc } from '../components.js';
 import { t } from '../i18n.js';
@@ -19,6 +19,7 @@ async function pickDataset(params) {
     }
   }
   const withEvals = Object.keys(byDs);
+  if (params.ds === ALL_DS) return { ds: ALL_DS, withEvals, byDs };
   if (params.ds && byDs[params.ds]) return { ds: params.ds, withEvals, byDs };
   // default: dataset with most detectors evaluated
   const best = withEvals.sort((a, b) => byDs[b].size - byDs[a].size)[0];
@@ -44,7 +45,8 @@ export async function render(root, params) {
 
   // dataset selector
   const datasets = await getDatasets().catch(() => []);
-  const opts = ctx.withEvals.map(d =>
+  const allOpt = `<option value="${ALL_DS}" ${ctx.ds === ALL_DS ? 'selected' : ''}>${esc(dsLabel(ALL_DS))}</option>`;
+  const opts = allOpt + ctx.withEvals.map(d =>
     `<option value="${d}" ${d === ctx.ds ? 'selected' : ''}>${esc(dsLabel(d))} · ${ctx.byDs[d].size} det</option>`).join('');
 
   body.innerHTML = `
