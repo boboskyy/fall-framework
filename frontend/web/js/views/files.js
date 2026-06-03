@@ -1,8 +1,10 @@
 // views/files.js — per-clip results: agreement strip (hardest clips first),
 // filterable/sortable long-format table, merged CSV export.
-import { getEvals, leaderboard, perFileMatrix } from '../store.js';
+import { api } from '../api.js';
+import { getEvals, leaderboard, perFileMatrix, invalidate } from '../store.js';
 import { dsLabel, shortName, family, dec, pct, ALL_DS } from '../format.js';
-import { qs, qsa, esc, spinner, empty, download } from '../components.js';
+import { qs, qsa, esc, spinner, empty, download, toast } from '../components.js';
+import { watchEvaluation } from '../live.js';
 import { t } from '../i18n.js';
 import { href, go } from '../router.js';
 
@@ -97,6 +99,8 @@ export async function render(root, params) {
   let sortK = 'filename', sortDir = 1, filter = 'all', detFilter = focusDet || '';
   let lastData = [];
   const evalIdByDet = Object.fromEntries(lb.rows.map(r => [r.name, r.evalId]));
+  const detHealth = {};
+  try { ((await api.detectors()).detectors || []).forEach(d => { detHealth[d.name] = d.container_status; }); } catch {}
 
   // expanded detail (fall mini-timeline = fall-frame density; exact frame
   // positions aren't stored, so this is a ratio bar that also reveals
@@ -111,6 +115,10 @@ export async function render(root, params) {
       <div class="row between">
         <span class="panel-h" style="margin:0">${esc(r.filename)}</span>
         <span class="btn-row">
+          ${detHealth[r.detName] === 'healthy'
+            ? `<button class="btn sm rerun">⟳ rerun</button>`
+            : `<button class="btn sm" disabled title="detector not healthy — start it in System">⟳ rerun (down)</button>`}
+          <span class="rerun-status dim mono"></span>
           ${evalId ? `<a class="btn ghost sm" href="${href('/eval', { id: evalId })}">eval →</a>` : ''}
           <a class="btn ghost sm" href="${href('/detectors', { name: r.detName })}">detector →</a>
         </span>
@@ -129,6 +137,56 @@ export async function render(root, params) {
       </div>
       <p class="muted-note mt">${esc(t('density_note'))}</p>
     </div>`;
+  }
+
+  function refreshRow(tr, r) {
+    const td = tr.children;
+    td[3].className = 'mono ' + (r.verdict === 'FALL' ? 'acc' : 'dim'); td[3].textContent = r.verdict;
+    td[4].innerHTML = r.classification ? `<span class="cls ${r.classification}">${r.classification}</span>` : '<span class="cls dim">·</span>';
+    td[5].textContent = r.fall_frames;
+    td[6].textContent = r.total_frames;
+    td[7].textContent = r.confidence != null ? dec(r.confidence, 2) : '–';
+    td[8].textContent = r.time;
+  }
+
+  // re-run this one clip × detector through the gateway, stream progress, update on done
+  function wireExp(exp, r, tr) {
+    const btn = exp.querySelector('.rerun');
+    if (!btn) return;
+    const st = exp.querySelector('.rerun-status');
+    btn.addEventListener('click', async () => {
+      let dataset = ds, fname = r.filename;
+      if (ds === ALL_DS) { const k = fname.indexOf('/'); dataset = fname.slice(0, k); fname = fname.slice(k + 1); }
+      btn.disabled = true; st.textContent = '· starting…';
+      try {
+        const res = await api.startEval({
+          dataset, detectors: [r.detName], selected_files: [fname],
+          verdict_config: { min_fall_frames: 1, min_fall_percentage: 0.0 }, sync: false,
+        });
+        const id = res.eval_id || res.evaluation_id || res.id;
+        watchEvaluation(id, {
+          onUpdate: (s) => { st.textContent = `· ${s.status} ${s.completed_tasks || 0}/${s.total_tasks || 1}`; },
+          onDone: async (s) => {
+            if (!['completed', 'partial'].includes(s.status)) { st.textContent = '· ' + s.status; btn.disabled = false; return; }
+            try {
+              const rr = await api.evalResults(id);
+              const sm = (rr.detector_summaries || [])[0];
+              const pf = (sm && (sm.per_file_results || []).find(x => x.filename === fname)) || (sm && (sm.per_file_results || [])[0]);
+              if (pf) {
+                r.fall_frames = pf.detector_fall_frame_count; r.total_frames = pf.detector_total_frames;
+                r.verdict = (pf.detector_verdict === 'FALL' || pf.detector_verdict === true) ? 'FALL' : 'ADL';
+                r.classification = pf.classification; r.confidence = pf.detector_confidence; r.time = pf.processing_time_ms;
+                exp.querySelector('td').innerHTML = expandHtml(r);
+                wireExp(exp, r, tr);
+                refreshRow(tr, r);
+                invalidate();          // history/leaderboard caches now stale
+                toast(`rerun: ${r.classification || ''} (${r.fall_frames} fall frames)`, 'ok');
+              } else { st.textContent = '· done (no row)'; btn.disabled = false; }
+            } catch (e) { st.textContent = '· results error'; btn.disabled = false; }
+          },
+        });
+      } catch (e) { st.textContent = '· ' + (e.message || e); btn.disabled = false; toast(e.message || e, 'err'); }
+    });
   }
 
   function view() {
@@ -170,6 +228,7 @@ export async function render(root, params) {
     exp.innerHTML = `<td colspan="9">${expandHtml(r)}</td>`;
     tr.after(exp);
     tr.classList.add('open');
+    wireExp(exp, r, tr);
   });
 
   qsa('#tbl th', el).forEach(th => th.addEventListener('click', () => {
