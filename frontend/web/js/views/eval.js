@@ -92,8 +92,8 @@ function renderResults(el, id, status, res) {
 
   // per-clip table (this run's actual clips)
   const flat = [];
-  for (const sm of rowsForFiles) for (const r of sm.per_file_results || []) flat.push({ d: shortName(sm.detector_name), r });
-  const clipRows = flat.map(({ d, r }) => `<tr>
+  for (const sm of rowsForFiles) for (const r of sm.per_file_results || []) flat.push({ d: shortName(sm.detector_name), det: sm.detector_name, r });
+  const clipRows = flat.map(({ d, r }, i) => `<tr class="clip-row" data-i="${i}">
     <td class="mono">${esc(r.filename)}</td>
     <td><span class="badge ${r.ground_truth_label === 'FALL' ? 'warn' : 'muted'}">${esc(r.ground_truth_label)}</span></td>
     <td class="mono">${esc(d)}</td>
@@ -109,7 +109,41 @@ function renderResults(el, id, status, res) {
       <div class="tbl-wrap"><table class="tbl">
         <thead><tr><th>clip</th><th>GT</th><th>detector</th><th>verdict</th><th>cls</th>
           <th class="num">fall_frames</th><th class="num">frames</th><th class="num">conf</th><th class="num">ms</th></tr></thead>
-        <tbody>${clipRows}</tbody></table></div></div>`;
+        <tbody id="eval-tb">${clipRows}</tbody></table></div></div>`;
+
+  const tb = el.querySelector('#eval-tb');
+  tb.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr.clip-row'); if (!tr) return;
+    const nxt = tr.nextElementSibling;
+    if (nxt && nxt.classList.contains('exp-row')) { nxt.remove(); tr.classList.remove('open'); return; }
+    const { r, det } = flat[+tr.dataset.i];
+    const exp = document.createElement('tr'); exp.className = 'exp-row';
+    exp.innerHTML = `<td colspan="9">${clipExpand(r, det)}</td>`;
+    tr.after(exp); tr.classList.add('open');
+  });
+}
+
+function clipExpand(r, det) {
+  const tot = r.detector_total_frames || 0, ff = r.detector_fall_frame_count || 0;
+  const pct = tot ? ff / tot * 100 : 0;
+  const wrong = r.classification === 'FP' || r.classification === 'FN';
+  const kind = ff === 0 ? 'no fall frames' : ff <= 2 ? 'event (1–2 fall frames)' : 'sustained';
+  const verdict = (r.detector_verdict === 'FALL' || r.detector_verdict === true) ? 'FALL' : 'ADL';
+  return `<div class="exp">
+    <div class="row between"><span class="panel-h" style="margin:0">${esc(r.filename)}</span>
+      <span class="btn-row"><a class="btn ghost sm" href="${href('/detectors', { name: det })}">detector →</a></span></div>
+    <div class="mt"><div class="bar tall"><div class="fill ${wrong ? 'bad' : ''}" style="width:${pct.toFixed(1)}%"></div></div>
+      <div class="tl-ax"><span>frame 0</span><span class="acc">${ff} fall / ${tot} frames · ${dec(ff / (tot || 1), 2)} density</span><span>${tot}</span></div></div>
+    <div class="exp-grid">
+      <div><div class="k">ground truth</div><div class="v">${esc(r.ground_truth_label)}</div></div>
+      <div><div class="k">verdict</div><div class="v ${verdict === 'FALL' ? 'acc' : 'dim'}">${verdict}</div></div>
+      <div><div class="k">class</div><div class="v"><span class="cls ${r.classification || 'dim'}">${esc(r.classification || '·')}</span></div></div>
+      <div><div class="k">signal</div><div class="v">${esc(kind)}</div></div>
+      <div><div class="k">confidence</div><div class="v">${r.detector_confidence != null ? dec(r.detector_confidence, 3) : '–'}</div></div>
+      <div><div class="k">processing</div><div class="v">${r.processing_time_ms} ms</div></div>
+    </div>
+    <p class="muted-note mt">${esc(t('density_note'))}</p>
+  </div>`;
 }
 
 let liveStop = null;

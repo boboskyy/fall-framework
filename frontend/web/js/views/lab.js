@@ -1,13 +1,54 @@
 // views/lab.js — Leaderboard Lab (landing). Per-dataset detector ranking
 // reconstructed from the gateway's single-detector evaluations.
-import { getDatasets, getEvals, leaderboard, bestPerMetric } from '../store.js';
-import { dsLabel, dec, pct, roman, FAMILY_LABEL, ALL_DS } from '../format.js';
+import { getDatasets, getEvals, leaderboard, bestPerMetric, invalidate } from '../store.js';
+import { dsLabel, shortName, dec, pct, roman, FAMILY_LABEL, ALL_DS } from '../format.js';
 import { stripedBar } from '../charts.js';
 import { qs, qsa, spinner, empty, esc } from '../components.js';
 import { t } from '../i18n.js';
 import { href, go } from '../router.js';
 
 const rankGlyph = (i) => roman(i);
+let _monitorStop = null;   // live running-tasks poller (one at a time)
+
+function renderRunning(running) {
+  return `<div class="running-panel section">
+    <div class="run-head"><span class="run-dot"></span>${esc(t('running'))} · ${running.length}</div>
+    ${running.map(e => {
+      const p = e.progress_pct ?? (e.total_tasks ? e.completed_tasks / e.total_tasks * 100 : 0);
+      return `<a class="run-row" href="${href('/eval', { id: e.eval_id })}">
+        <span class="rn">${esc(dsLabel(e.dataset_name))} <span class="dim">${esc(e.detector_names.map(shortName).join(', '))}</span></span>
+        ${stripedBar(p / 100, { cls: 'violet' })}
+        <span class="rp">${dec(p, 0)}% · ${e.completed_tasks || 0}/${e.total_tasks ?? '?'}</span>
+      </a>`;
+    }).join('')}
+  </div>`;
+}
+
+// Poll for running evals; show the panel + condense the leaderboard while any run.
+function startMonitor(root, params) {
+  let iv = null, hadRunning = false;
+  const stop = () => { if (iv) clearInterval(iv); iv = null; };
+  const tick = async () => {
+    const runEl = document.querySelector('#lab-running');
+    if (!runEl) { stop(); return; }                 // navigated away
+    let evals;
+    try { evals = await getEvals(true); } catch { return; }
+    const running = evals.filter(e => e.status === 'pending' || e.status === 'running');
+    const lb = document.querySelector('#lb-table .lb');
+    if (running.length) {
+      runEl.innerHTML = renderRunning(running);
+      lb && lb.classList.add('condensed');
+      hadRunning = true;
+    } else {
+      runEl.innerHTML = '';
+      lb && lb.classList.remove('condensed');
+      if (hadRunning) { hadRunning = false; stop(); invalidate(); render(root, params); }  // a task finished → refresh
+    }
+  };
+  iv = setInterval(tick, 2000);
+  tick();
+  return stop;
+}
 
 async function pickDataset(params) {
   const evals = await getEvals();
@@ -27,6 +68,7 @@ async function pickDataset(params) {
 }
 
 export async function render(root, params) {
+  if (_monitorStop) { _monitorStop(); _monitorStop = null; }
   root.innerHTML = `<div class="eyebrow"><span class="n">01</span>${esc(t('lab_h'))}</div>
     <h1 class="page-h"><span class="hash">#</span>${esc(t('lab_h'))}</h1>
     <p class="page-sub">${esc(t('lab_sub'))}</p>
@@ -62,6 +104,7 @@ export async function render(root, params) {
       </div>
     </div>
     <div id="lb-stats"></div>
+    <div id="lab-running"></div>
     <div id="lb-chips"></div>
     <div id="lb-table" class="section">${spinner('…')}</div>`;
 
@@ -125,4 +168,6 @@ export async function render(root, params) {
     <div class="panel"><div class="lb">${rowsHtml}</div></div>
     <p class="muted-note mt">${esc(t('ranking'))}: ${esc(t('best_f1'))} ${esc(best.f1.short)} ${dec(best.f1.f1)} ·
       verdict min_fall_frames=${(lb.verdictConfig && lb.verdictConfig.min_fall_frames) ?? 1}</p>`;
+
+  _monitorStop = startMonitor(root, params);   // live running-tasks panel + condensed leaderboard
 }
