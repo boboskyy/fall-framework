@@ -55,7 +55,11 @@ function shell() {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDrawer(); }
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && document.body.classList.contains('drawer-open')) setDrawer(false);
+    if (e.key !== 'Escape') return;
+    if (document.body.classList.contains('drawer-open')) { setDrawer(false); return; }  // close drawer first
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;   // let form controls keep Esc
+    history.back();                                       // otherwise Esc = back
   });
 }
 
