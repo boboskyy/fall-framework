@@ -1,0 +1,129 @@
+// app.js — shell, navigation, language, system drawer, routing.
+import { route, start, onChange, href, parse, setNotFound } from './router.js';
+import { t, lang, setLang, onLang } from './i18n.js';
+import { api } from './api.js';
+import { qs, qsa, esc, healthBadge } from './components.js';
+
+import * as lab from './views/lab.js';
+import * as threshold from './views/threshold.js';
+import * as diversity from './views/diversity.js';
+import * as files from './views/files.js';
+import * as matrix from './views/matrix.js';
+import * as evaluate from './views/evaluate.js';
+import * as detectors from './views/detectors.js';
+import * as datasets from './views/datasets.js';
+import * as system from './views/system.js';
+
+const NAV = [
+  { path: '/', key: 'nav_lab' },
+  { path: '/evaluate', key: 'nav_evaluate' },
+  { path: '/matrix', key: 'nav_matrix' },
+  { path: '/detectors', key: 'nav_detectors' },
+  { path: '/datasets', key: 'nav_datasets' },
+];
+
+function shell() {
+  const root = qs('#root');
+  root.className = 'app';
+  root.innerHTML = `
+    <header class="topbar">
+      <a class="brand" href="${href('/')}"><span class="p">&gt;_</span>fallfw<span class="slash">/</span><span class="seg" id="brand-seg">lab</span></a>
+      <nav class="nav" id="nav"></nav>
+      <div class="topbar-right">
+        <div class="lang" id="lang">
+          <button data-l="pl">PL</button><span class="sep">/</span><button data-l="en">EN</button>
+        </div>
+      </div>
+    </header>
+    <main class="main" id="app-main"></main>
+    <footer class="foot">// FallFW gateway · Flask REST · ${esc(api.base)} — research console</footer>
+    <div class="sysbar" id="sysbar" role="button" tabindex="0" aria-expanded="false" aria-controls="drawer" aria-label="system panel">
+      <span id="sys-summary">${esc(t('system'))}: …</span>
+      <span class="grow"></span>
+      <span class="chev">▴</span>
+    </div>
+    <div class="drawer" id="drawer"><div class="drawer-inner" id="drawer-inner"></div></div>`;
+
+  renderNav();
+  qsa('#lang button').forEach(b => b.addEventListener('click', () => setLang(b.dataset.l)));
+  syncLang();
+
+  const sysbar = qs('#sysbar');
+  sysbar.addEventListener('click', toggleDrawer);
+  sysbar.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDrawer(); }
+  });
+}
+
+const A11Y_LABELS = { 'ds-sel': 'dataset', 'ds': 'dataset', 'filter': 'classification filter',
+  'detf': 'detector filter', 'hist-det': 'histogram detector', 'thr': 'min_fall_frames threshold' };
+function decorateA11y(root) {
+  root.querySelectorAll('select, input[type=range]').forEach(el => {
+    if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', A11Y_LABELS[el.id] || el.id || 'control');
+  });
+}
+
+function renderNav() {
+  const cur = parse().path;
+  qs('#nav').innerHTML = NAV.map(n =>
+    `<a href="${href(n.path)}" class="${n.path === cur ? 'active' : ''}">${esc(t(n.key))}</a>`).join('');
+}
+function syncLang() { qsa('#lang button').forEach(b => b.classList.toggle('active', b.dataset.l === lang())); }
+
+function toggleDrawer() {
+  const open = document.body.classList.toggle('drawer-open');
+  qs('#sysbar').setAttribute('aria-expanded', open ? 'true' : 'false');
+  qs('#sysbar .chev').textContent = open ? '▾' : '▴';
+  if (open) system.render(qs('#drawer-inner'));   // re-render → fresh container health
+}
+
+async function refreshSysbar() {
+  const el = qs('#sys-summary');
+  if (!el) return;
+  try {
+    const d = await api.detectors();
+    const dets = d.detectors || [];
+    const healthy = dets.filter(x => x.container_status === 'healthy').length;
+    el.innerHTML = `${esc(t('system'))}: <span class="hl">${healthy}/${dets.length}</span> ${esc(t('healthy'))} · <span class="badge ok" style="margin-left:.3rem"><span class="dotled"></span>${esc(t('gateway_ok'))}</span>`;
+  } catch {
+    el.innerHTML = `${esc(t('system'))}: <span class="badge bad"><span class="dotled"></span>${esc(t('gateway_down'))}</span>`;
+  }
+}
+
+const SEG = { '/': 'lab', '/threshold': 'threshold', '/diversity': 'diversity', '/files': 'clips',
+              '/matrix': 'matrix', '/evaluate': 'evaluate', '/detectors': 'detectors', '/datasets': 'datasets' };
+
+function bind(view) {
+  return (params) => {
+    const main = qs('#app-main');
+    main.innerHTML = '';
+    Promise.resolve(view.render(main, params))
+      .then(() => decorateA11y(main))
+      .catch(e => main.innerHTML = `<div class="empty"><span class="big">error</span>${esc(e.message || e)}</div>`);
+    qs('#brand-seg').textContent = SEG[parse().path] || 'lab';
+  };
+}
+
+route('/', bind(lab));
+route('/threshold', bind(threshold));
+route('/diversity', bind(diversity));
+route('/files', bind(files));
+route('/matrix', bind(matrix));
+route('/evaluate', bind(evaluate));
+route('/detectors', bind(detectors));
+route('/datasets', bind(datasets));
+setNotFound((p) => {
+  qs('#app-main').innerHTML = `<div class="empty"><span class="big">404</span>${esc(p)}</div>`;
+  qs('#brand-seg').textContent = '404';
+});
+
+onChange(() => renderNav());
+onLang(() => { renderNav(); syncLang(); refreshSysbar(); const { path, params } = parse();
+  const r = { '/': lab, '/threshold': threshold, '/diversity': diversity, '/files': files,
+              '/matrix': matrix, '/evaluate': evaluate, '/detectors': detectors, '/datasets': datasets }[path];
+  if (r) bind(r)(params); });
+
+shell();
+start();
+refreshSysbar();
+setInterval(refreshSysbar, 15000);

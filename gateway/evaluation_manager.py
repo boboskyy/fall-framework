@@ -1,17 +1,26 @@
 
 import csv
 import io
+import json
 import threading
 import time
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import requests
+
 from gateway.dataset_models import (
     DatasetFile, DatasetManifest, EvaluationFileResult,
     EvaluationDetectorSummary, EvaluationJob, EvaluationResult,
 )
 from gateway.dataset_manager import DatasetManager
+
+
+# Circuit breaker: if a detector fails this many clips in a row, stop sending it
+# more clips. Prevents one wedged/hung container (e.g. a detector that locks up
+# on a specific clip) from stalling an entire evaluation for hours.
+EVAL_MAX_CONSECUTIVE_FAILURES = 3
 
 
 def compute_video_verdict(detection_result: dict,
@@ -142,6 +151,19 @@ class EvaluationManager:
                 'message': 'Evaluation started',
             }
 
+    def _detector_healthy(self, detector_name: str, timeout: float = 5.0) -> bool:
+        """Quick liveness probe. A single-threaded detector wedged on one clip
+        cannot answer /health, so this distinguishes a transient clip error from
+        a hung container."""
+        detector = self.orchestrator.registry.get_detector(detector_name)
+        if not detector:
+            return False
+        url = f'http://{detector.docker_service_name}:{detector.internal_port}/health'
+        try:
+            return requests.get(url, timeout=timeout).status_code == 200
+        except Exception:
+            return False
+
     def _run_evaluation(self, job: EvaluationJob, manifest: DatasetManifest,
                         eval_files: List[DatasetFile]):
         start_time = time.time()
@@ -164,23 +186,39 @@ class EvaluationManager:
         detector_file_results: Dict[str, List[EvaluationFileResult]] = {
             d: [] for d in job.detector_names
         }
+        consecutive_failures: Dict[str, int] = {d: 0 for d in job.detector_names}
+        wedged_detectors: set = set()
 
         for df in eval_files:
             if job.cancelled:
                 break
+
+            # Detectors tripped by the circuit breaker: record their remaining
+            # clips as failed immediately, with no network call (no waiting).
+            for det in job.detector_names:
+                if det in wedged_detectors:
+                    job.sub_tasks[f'{df.filename}::{det}'] = {
+                        'status': 'failed',
+                        'error': 'Detector wedged - remaining clips skipped',
+                    }
+                    job.failed_tasks += 1
+
+            active_detectors = [d for d in job.detector_names if d not in wedged_detectors]
+            if not active_detectors:
+                continue
 
             input_path = f'{shared_base}/{df.filename}'
 
             result = self.orchestrator.submit_multi(
                 input_path=input_path,
                 input_type=manifest.input_type,
-                detector_names=job.detector_names,
+                detector_names=active_detectors,
                 config=job.config,
                 sync=True,
             )
 
             if 'error' in result:
-                for det in job.detector_names:
+                for det in active_detectors:
                     task_key = f'{df.filename}::{det}'
                     job.sub_tasks[task_key] = {
                         'status': 'failed',
@@ -193,7 +231,7 @@ class EvaluationManager:
             if not orch_job:
                 continue
 
-            for det in job.detector_names:
+            for det in active_detectors:
                 task_key = f'{df.filename}::{det}'
                 sub = orch_job.sub_tasks.get(det)
 
@@ -203,6 +241,15 @@ class EvaluationManager:
                         'error': sub.error if sub else 'No result',
                     }
                     job.failed_tasks += 1
+                    consecutive_failures[det] += 1
+                    # Trip the breaker if the container is wedged (can't answer
+                    # /health) or keeps failing clip after clip. Stops one bad
+                    # clip from stalling the whole eval for hours.
+                    if det not in wedged_detectors and (
+                        not self._detector_healthy(det)
+                        or consecutive_failures[det] >= EVAL_MAX_CONSECUTIVE_FAILURES
+                    ):
+                        wedged_detectors.add(det)
                     continue
 
                 file_result = self._compute_file_result(
@@ -213,6 +260,7 @@ class EvaluationManager:
 
                 job.sub_tasks[task_key] = {'status': 'completed'}
                 job.completed_tasks += 1
+                consecutive_failures[det] = 0
 
         # Compute summaries
         detector_summaries = []
@@ -532,6 +580,76 @@ class EvaluationManager:
 
     def list_evaluations(self) -> List[Dict]:
         return [job.get_summary() for job in self._evaluations.values()]
+
+    # --- live progress (per-detector) + SSE stream ---------------------------
+    # NOTE: powers the redesigned UI's live cockpit. New endpoints — they take
+    # effect only after the gateway is redeployed; the UI falls back to /status
+    # polling until then.
+    def get_evaluation_progress(self, eval_id: str) -> Optional[Dict]:
+        job = self._evaluations.get(eval_id)
+        if not job:
+            return None
+        n_det = len(job.detector_names) or 1
+        per_file = (job.total_tasks // n_det) if n_det else 0
+        per = {
+            d: {'completed': 0, 'failed': 0, 'total': per_file,
+                'running': False, 'status': 'queued'}
+            for d in job.detector_names
+        }
+        for key, st in job.sub_tasks.items():
+            parts = key.split('::')
+            det = parts[1] if len(parts) > 1 else None
+            if det in per:
+                s = (st or {}).get('status')
+                if s == 'completed':
+                    per[det]['completed'] += 1
+                elif s == 'failed':
+                    per[det]['failed'] += 1
+        finished = job.status in ('completed', 'partial', 'failed', 'cancelled')
+        for p in per.values():
+            done = p['completed'] + p['failed']
+            if finished:
+                p['status'] = ('done' if p['failed'] == 0
+                               else 'failed' if p['completed'] == 0 else 'partial')
+            elif p['total'] and done >= p['total']:
+                p['status'] = 'done'
+            elif done > 0:
+                p['status'] = 'running'
+                p['running'] = True
+            else:
+                p['status'] = 'queued'
+        summary = job.get_summary()
+        summary['per_detector'] = per
+        return summary
+
+    def stream_evaluation(self, eval_id: str):
+        """Return a generator yielding Server-Sent Events of progress until the
+        evaluation finishes. None if the evaluation does not exist."""
+        if eval_id not in self._evaluations:
+            return None
+
+        def gen():
+            last = None
+            ticks = 0
+            terminal = ('completed', 'partial', 'failed', 'cancelled')
+            while True:
+                prog = self.get_evaluation_progress(eval_id)
+                if prog is None:
+                    yield f'event: error\ndata: {json.dumps({"error": "NOT_FOUND"})}\n\n'
+                    return
+                payload = json.dumps(prog)
+                if payload != last:
+                    yield f'data: {payload}\n\n'
+                    last = payload
+                elif ticks % 10 == 0:
+                    yield ': ka\n\n'   # heartbeat keeps the channel warm through long unchanged stretches
+                if prog.get('status') in terminal:
+                    yield f'event: done\ndata: {payload}\n\n'
+                    return
+                ticks += 1
+                time.sleep(0.6)
+
+        return gen
 
     def cancel_evaluation(self, eval_id: str) -> Dict:
         job = self._evaluations.get(eval_id)

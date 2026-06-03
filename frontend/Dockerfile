@@ -1,23 +1,12 @@
-FROM node:20-alpine
-WORKDIR /app
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+# Static research console served by nginx, proxying /api → gateway.
+# (Replaces the previous Next.js build; the dashboard is now a no-build static
+#  app in the proj- design language.)
+FROM nginx:alpine
 
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY web /usr/share/nginx/html
 
-COPY package.json ./
-RUN npm install --omit=dev --ignore-scripts && \
-    npm rebuild sharp
-
-COPY --chown=nextjs:nodejs .next/standalone/frontend/server.js ./
-COPY --chown=nextjs:nodejs .next/standalone/frontend/.next ./.next
-COPY --chown=nextjs:nodejs .next/static ./.next/static
-COPY --chown=nextjs:nodejs public ./public
-
-USER nextjs
 EXPOSE 3000
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-
-CMD ["node", "server.js"]
+HEALTHCHECK CMD wget --spider -q http://localhost:3000/ || exit 1
+CMD ["nginx", "-g", "daemon off;"]

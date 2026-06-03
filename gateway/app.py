@@ -1000,6 +1000,38 @@ def create_gateway_app():
             }), 404
         return jsonify(status)
 
+    @app.route('/api/v1/evaluate/<eval_id>/progress', methods=['GET'])
+    def get_evaluation_progress(eval_id):
+        # Per-detector live progress for the redesigned UI cockpit.
+        prog = evaluation_manager.get_evaluation_progress(eval_id)
+        if not prog:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Evaluation "{eval_id}" not found',
+            }), 404
+        return jsonify(prog)
+
+    @app.route('/api/v1/evaluate/<eval_id>/stream', methods=['GET'])
+    def stream_evaluation(eval_id):
+        # Server-Sent Events live channel. One-way server→client progress push;
+        # the frontend falls back to /status + /progress polling if absent.
+        from flask import Response, stream_with_context
+        gen = evaluation_manager.stream_evaluation(eval_id)
+        if gen is None:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Evaluation "{eval_id}" not found',
+            }), 404
+        return Response(
+            stream_with_context(gen()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',
+                'Connection': 'keep-alive',
+            },
+        )
+
     @app.route('/api/v1/evaluate/<eval_id>/cancel', methods=['POST'])
     def cancel_evaluation(eval_id):
         result = evaluation_manager.cancel_evaluation(eval_id)
