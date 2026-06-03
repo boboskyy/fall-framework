@@ -53,6 +53,9 @@ function shell() {
   sysbar.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDrawer(); }
   });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('drawer-open')) setDrawer(false);
+  });
 }
 
 const A11Y_LABELS = { 'ds-sel': 'dataset', 'ds': 'dataset', 'filter': 'classification filter',
@@ -70,12 +73,20 @@ function renderNav() {
 }
 function syncLang() { qsa('#lang button').forEach(b => b.classList.toggle('active', b.dataset.l === lang())); }
 
-function toggleDrawer() {
-  const open = document.body.classList.toggle('drawer-open');
+function setDrawer(open) {
+  document.body.classList.toggle('drawer-open', open);
   qs('#sysbar').setAttribute('aria-expanded', open ? 'true' : 'false');
   qs('#sysbar .chev').textContent = open ? '▾' : '▴';
-  if (open) system.render(qs('#drawer-inner'));   // re-render → fresh container health
+  if (open) {
+    const inner = qs('#drawer-inner');
+    inner.innerHTML = `<div class="drawer-head"><span class="grow"></span>
+      <button class="btn ghost sm" id="drawer-close" aria-label="close">✕</button></div>
+      <div id="drawer-body"></div>`;
+    qs('#drawer-close').addEventListener('click', (e) => { e.stopPropagation(); setDrawer(false); });
+    system.render(qs('#drawer-body'));   // re-render → fresh container health
+  }
 }
+function toggleDrawer() { setDrawer(!document.body.classList.contains('drawer-open')); }
 
 async function refreshSysbar() {
   const el = qs('#sys-summary');
@@ -117,7 +128,7 @@ setNotFound((p) => {
   qs('#brand-seg').textContent = '404';
 });
 
-onChange(() => renderNav());
+onChange(() => { renderNav(); if (document.body.classList.contains('drawer-open')) setDrawer(false); });
 onLang(() => { renderNav(); syncLang(); refreshSysbar(); const { path, params } = parse();
   const r = { '/': lab, '/threshold': threshold, '/diversity': diversity, '/files': files,
               '/matrix': matrix, '/evaluate': evaluate, '/detectors': detectors, '/datasets': datasets }[path];

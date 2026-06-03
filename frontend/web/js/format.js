@@ -102,3 +102,11 @@ export function classifyAt(r, k) {
 }
 
 export const MAX_THRESHOLD = 30;
+
+const ROMAN = [['X', 10], ['IX', 9], ['V', 5], ['IV', 4], ['I', 1]];
+export function roman(n) {
+  if (!n || n < 1) return String(n ?? '');
+  let out = '', x = n;
+  for (const [sym, val] of ROMAN) while (x >= val) { out += sym; x -= val; }
+  return out;
+}

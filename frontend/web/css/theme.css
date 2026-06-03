@@ -151,7 +151,9 @@ h2.sec-h, .sec-h {
   background:var(--panel); border:1px dotted var(--dot);
   padding:1rem 1.15rem;
 }
-.panel + .panel { margin-top:1rem; }
+/* stacked panels directly inside a section need spacing; grid children do NOT
+   (the grid gap handles them) — keep this scoped so it can't misalign cards. */
+.section > .panel + .panel { margin-top:1rem; }
 .panel-h {
   color:var(--accent); font-family:var(--mono); font-size:.72rem;
   letter-spacing:.06em; text-transform:uppercase; margin:0 0 .8rem;
@@ -335,6 +337,10 @@ table.tbl td.mono, table.tbl td .mono { font-family:var(--mono); }
 }
 .heat td.cell.diag { color:var(--muted); opacity:.5; }
 .heat td.cell:hover { outline:1px solid var(--blue); z-index:2; }
+/* cross-dataset matrix needs roomier cells (values like "0,79 III") */
+.heat.mtx td.cell { width:auto; min-width:3.8rem; height:1.9rem; padding:.3rem .55rem; }
+.heat.mtx th { padding:.3rem .55rem; }
+.heat .sup { color:var(--accent); font-size:.78em; margin-left:.15em; }
 
 /* agreement strip: row=clip col=detector */
 .strip { display:grid; gap:1px; }
@@ -344,7 +350,7 @@ table.tbl td.mono, table.tbl td .mono { font-family:var(--mono); }
 .strip .c.correct { background:var(--ok-dim); border-color:rgba(152,195,121,.35); }
 .strip .c.wrong   { background:var(--err-dim); border-color:rgba(224,108,117,.4); }
 .strip .c.na      { background:var(--panel-2); }
-.strip-row { display:grid; grid-template-columns:auto 1fr; gap:.6rem; align-items:center; }
+.strip-row { display:grid; grid-template-columns:8.5rem 1fr; gap:.6rem; align-items:center; margin:1px 0; }
 .strip-row .lab { font-family:var(--mono); font-size:.66rem; color:var(--muted);
                   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
@@ -412,12 +418,16 @@ input[type=range]::-moz-range-thumb {
 
 /* ================================================================ system drawer */
 .sysbar {
-  position:sticky; bottom:0; z-index:30;
+  position:sticky; bottom:0; z-index:50;       /* above the drawer so it always toggles */
   display:flex; align-items:center; gap:.8rem;
   padding:.55rem 1.4rem; border-top:1px dotted var(--dot);
-  background:rgba(21,21,24,.9); backdrop-filter:blur(8px);
+  background:rgba(21,21,24,.94); backdrop-filter:blur(8px);
   font-family:var(--mono); font-size:.74rem; color:var(--muted); cursor:pointer;
 }
+.drawer-head { display:flex; align-items:center; gap:.8rem; margin-bottom:1rem;
+  position:sticky; top:0; background:var(--panel); padding-bottom:.6rem;
+  border-bottom:1px dotted var(--dot); z-index:1; }
+.drawer-head .x { margin-left:auto; }
 .sysbar:hover { color:var(--text); }
 .sysbar .grow { flex:1 1 auto; }
 .sysbar .chev { transition:transform .2s; }
@@ -467,3 +477,9 @@ hr.sep { border:none; border-top:1px dotted var(--dot); margin:1.4rem 0; }
 .muted-note { color:var(--muted); font-size:.76rem; line-height:1.6; }
 .center { text-align:center; }
 .nowrap { white-space:nowrap; }
+.clamp3 { display:-webkit-box; -webkit-line-clamp:3; line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.desc { color:var(--text); line-height:1.6; font-size:.82rem; margin:0; }
+.metabar { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.85rem; }
+.metabar a.badge { text-decoration:none; }
+.grid.auto.cards { align-items:stretch; }
+.grid.auto.cards > .panel { display:flex; flex-direction:column; }

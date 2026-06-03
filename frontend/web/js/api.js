@@ -41,10 +41,25 @@ export const api = {
   startDetector: (n) => req(`/detectors/${n}/start`, { method: 'POST' }),
   stopDetector: (n) => req(`/detectors/${n}/stop`, { method: 'POST' }),
   buildDetector: (n, device = 'cpu') => req(`/detectors/${n}/build`, { method: 'POST', body: JSON.stringify({ device }) }),
+  rescanDetectors: () => req('/detectors/rescan', { method: 'POST' }),
+  downloadDetector: (n) => req(`/detectors/${n}/download`, { method: 'POST', body: JSON.stringify({}) }),
+  templateUrl: (name, category = 'object_detection', input = 'video') =>
+    `${BASE}/template?name=${encodeURIComponent(name)}&category=${category}&input_type=${input}`,
   // datasets
   datasets: () => req('/datasets'),
+  refreshRegistry: () => req('/datasets/refresh-registry', { method: 'POST' }),
+  downloadDataset: (n) => req(`/datasets/${n}/download`, { method: 'POST' }),
+  async uploadDataset(file, name) {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (name) fd.append('name', name);
+    const r = await fetch(BASE + '/datasets/upload', { method: 'POST', body: fd });
+    const b = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(b.message || b.error || r.status), { status: r.status });
+    return b;
+  },
   dataset: (n) => req(`/datasets/${n}`),
-  datasetFiles: (n) => req(`/datasets/${n}/files`),
+  datasetFiles: (n, perPage = 2000) => req(`/datasets/${n}/files?per_page=${perPage}`),
   // evaluations
   evaluations: () => req('/evaluations'),
   evalStatus: (id) => req(`/evaluate/${id}/status`),

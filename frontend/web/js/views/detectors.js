@@ -2,7 +2,7 @@
 // aggregate stats). ?name= shows one detector's detail.
 import { api } from '../api.js';
 import { shortName, family, FAMILY_LABEL, dsLabel, dec, pct, ms } from '../format.js';
-import { qs, qsa, esc, spinner, empty, healthBadge } from '../components.js';
+import { qs, qsa, esc, spinner, empty, healthBadge, toast } from '../components.js';
 import { stripedBar } from '../charts.js';
 import { t } from '../i18n.js';
 import { href } from '../router.js';
@@ -12,15 +12,33 @@ export async function render(root, params) {
 
   root.innerHTML = `<div class="eyebrow"><span class="n">04</span>${esc(t('detectors_h'))}</div>
     <h1 class="page-h"><span class="hash">#</span>${esc(t('detectors_h'))}</h1>
-    <p class="page-sub">11 detektorów · 6 rodzin algorytmicznych (A–F)</p>
+    <p class="page-sub" id="d-sub">6 rodzin algorytmicznych (A–F)</p>
+    <div class="btn-row mb">
+      <button class="btn ghost sm" id="rescan">${esc(t('rescan'))}</button>
+      <input class="ipt" id="tpl-name" placeholder="new_detector_name" style="max-width:210px">
+      <button class="btn sm" id="get-tpl">${esc(t('template'))}</button>
+    </div>
     <div id="d-body">${spinner('…')}</div>`;
   const body = qs('#d-body', root);
+
+  qs('#rescan', root).addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '…';
+    try { await api.rescanDetectors(); toast('detectors rescanned', 'ok'); render(root, params); }
+    catch (err) { toast(err.message || err, 'err'); e.target.disabled = false; e.target.textContent = t('rescan'); }
+  });
+  qs('#get-tpl', root).addEventListener('click', () => {
+    const name = qs('#tpl-name', root).value.trim();
+    if (!/^[a-z0-9_]+$/.test(name)) { toast('name: lowercase letters, digits, underscore', 'err'); return; }
+    window.open(api.templateUrl(name), '_blank');
+  });
 
   let dets, summary = [];
   try {
     dets = (await api.detectors()).detectors || [];
     summary = await api.detectorsSummary().catch(() => []);
   } catch (e) { body.innerHTML = empty('error', e.message || e); return; }
+  const subEl = qs('#d-sub', root);
+  if (subEl) subEl.textContent = `${dets.length} ${t('detectors')} · 6 rodzin algorytmicznych (A–F)`;
   const sumBy = Object.fromEntries(summary.map(s => [s.detector_name, s]));
 
   // group by family
@@ -31,7 +49,7 @@ export async function render(root, params) {
     <div class="section">
       <h2 class="sec-h">${f} — ${esc(FAMILY_LABEL[f] || '')}<span class="rule"></span>
         <span class="meta">${fams[f].length}</span></h2>
-      <div class="grid auto">
+      <div class="grid auto cards">
         ${fams[f].map(d => {
           const s = sumBy[d.name] || {};
           const f1 = s.overall_f1, acc = s.overall_accuracy;
@@ -40,8 +58,8 @@ export async function render(root, params) {
               <strong class="mono hl">${esc(shortName(d.name))}</strong>
               ${healthBadge(d.container_status)}
             </div>
-            <div class="muted-note" style="margin:.5rem 0">${esc(d.description || d.category || '')}</div>
-            <div class="row" style="gap:1.4rem">
+            <p class="desc clamp3" style="margin:.55rem 0 0">${esc(d.description || d.category || '')}</p>
+            <div class="row" style="gap:1.4rem;margin-top:auto;padding-top:.85rem">
               <div><div class="k mono" style="font-size:.6rem;color:var(--muted)">F1 (overall)</div>
                 <div class="num hl">${f1 != null ? dec(f1) : '–'}</div></div>
               <div><div class="k mono" style="font-size:.6rem;color:var(--muted)">EVALS</div>
@@ -107,9 +125,15 @@ async function detail(root, name) {
       <div class="stat"><div class="k">avg time</div><div class="v small">${ev.avg_processing_time_ms != null ? ms(ev.avg_processing_time_ms) : '–'}</div></div>
     </div>
     <div class="panel section">
-      <div class="muted-note">${esc(inf.description || '')}</div>
-      <div class="muted-note mt">category: ${esc(inf.category || '')} · input: ${esc((inf.supported_input_types || []).join(', '))} ·
-        ${inf.requires_gpu ? 'GPU' : 'CPU'} · port :${inf.port}${src ? ` · <a href="${esc(src)}" target="_blank" rel="noopener">source</a>` : ''}</div>
+      <p class="desc">${esc(inf.description || '')}</p>
+      <div class="metabar">
+        <span class="badge info"><span class="fam" style="width:1rem;height:1rem;font-size:.58rem;border:none">${family(name)}</span>${esc(FAMILY_LABEL[family(name)] || '')}</span>
+        ${inf.category ? `<span class="badge muted">${esc(inf.category)}</span>` : ''}
+        <span class="badge muted">${esc((inf.supported_input_types || []).join(', ') || 'video')}</span>
+        <span class="badge ${inf.requires_gpu ? 'info' : 'muted'}">${inf.requires_gpu ? 'GPU' : 'CPU'}${inf.device ? ' · ' + esc(inf.device) : ''}</span>
+        <span class="badge muted">:${inf.port}</span>
+        ${src ? `<a class="badge info" href="${esc(src)}" target="_blank" rel="noopener">source ↗</a>` : ''}
+      </div>
     </div>
     ${cm}
     ${perDs}`;

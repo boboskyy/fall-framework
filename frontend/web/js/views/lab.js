@@ -1,14 +1,13 @@
 // views/lab.js — Leaderboard Lab (landing). Per-dataset detector ranking
 // reconstructed from the gateway's single-detector evaluations.
 import { getDatasets, getEvals, leaderboard, bestPerMetric } from '../store.js';
-import { dsLabel, dec, pct, FAMILY_LABEL } from '../format.js';
+import { dsLabel, dec, pct, roman, FAMILY_LABEL } from '../format.js';
 import { stripedBar } from '../charts.js';
 import { qs, qsa, spinner, empty, esc } from '../components.js';
 import { t } from '../i18n.js';
 import { href, go } from '../router.js';
 
-const CIRC = ['⓪','①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
-const rankGlyph = (i) => CIRC[i] || `${i}`;
+const rankGlyph = (i) => roman(i);
 
 async function pickDataset(params) {
   const evals = await getEvals();
@@ -60,6 +59,7 @@ export async function render(root, params) {
         <a href="${href('/matrix')}">${esc(t('nav_matrix'))}</a>
       </div>
     </div>
+    <div id="lb-stats"></div>
     <div id="lb-chips"></div>
     <div id="lb-table" class="section">${spinner('…')}</div>`;
 
@@ -71,6 +71,23 @@ export async function render(root, params) {
     qs('#lb-chips', body).innerHTML = '';
     return;
   }
+
+  // dashboard summary strip
+  const allEvals = await getEvals();
+  const clips = Math.max(...lb.rows.map(r => r.summary.total_files));
+  const gtPf = (lb.rows.find(r => !r.partial) || lb.rows[0]).perFile;
+  const fall = gtPf.filter(r => r.ground_truth_fall === true).length;
+  const adl = gtPf.filter(r => r.ground_truth_fall === false).length;
+  const avgF1 = lb.rows.reduce((s, r) => s + r.f1, 0) / lb.rows.length;
+  const stat = (k, v, sub = '') => `<div class="stat"><div class="k">${esc(k)}</div><div class="v small">${v}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
+  qs('#lb-stats', body).innerHTML = `<div class="grid section" style="grid-template-columns:repeat(auto-fit,minmax(128px,1fr))">
+    ${stat(t('detectors'), lb.rows.length)}
+    ${stat(t('clips'), clips)}
+    ${stat(t('lab_balance'), `${fall} / ${adl}`)}
+    ${stat(t('lab_avgf1'), dec(avgF1))}
+    ${stat(t('lab_evals_total'), allEvals.length)}
+    ${stat(t('lab_datasets'), ctx.withEvals.length)}
+  </div>`;
 
   const best = bestPerMetric(lb.rows);
   const chip = (k, label, det, val) => `

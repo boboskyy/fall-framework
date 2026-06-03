@@ -43,6 +43,16 @@ export async function render(root, params) {
       </div>
       <div class="panel-h">${esc(t('select_detectors'))}</div>
       <div class="chips" id="chips">${chips}</div>
+      <div class="row mt">
+        <span class="mono dim">scope</span>
+        <div class="select"><select id="scope">
+          <option value="all">${esc(t('scope_all'))}</option>
+          <option value="pick">${esc(t('scope_pick'))}</option>
+        </select></div>
+        <input class="ipt" id="file-search" placeholder="filter…" style="display:none;flex:1;max-width:240px">
+        <span class="mono dim" id="file-count"></span>
+      </div>
+      <div id="file-pick" style="display:none;max-height:240px;overflow:auto;margin-top:.6rem;border:1px dotted var(--dot);padding:.5rem .7rem"></div>
       <div class="btn-row mt">
         <button class="btn" id="start">▶ ${esc(t('start'))}</button>
         <span class="mono dim" id="sel-count">0</span>
@@ -62,13 +72,49 @@ export async function render(root, params) {
   qs('#all', el).addEventListener('click', () => { qsa('#chips .chip', el).forEach(c => { sel.add(c.dataset.det); c.classList.add('selected'); }); refreshCount(); });
   qs('#clear', el).addEventListener('click', () => { sel.clear(); qsa('#chips .chip', el).forEach(c => c.classList.remove('selected')); refreshCount(); });
 
+  // --- clip scope: whole dataset vs pick specific clips (restores single-clip runs) ---
+  const dsEl = qs('#ds', el), scopeEl = qs('#scope', el), filePick = qs('#file-pick', el), fileSearch = qs('#file-search', el);
+  const picked = new Set();
+  let filesCache = [];
+  const updFileCount = () => { qs('#file-count', el).textContent = scopeEl.value === 'pick' ? `${picked.size} ${t('files_picked')}` : ''; };
+  function renderFiles(q = '') {
+    const ql = q.toLowerCase();
+    const list = filesCache.filter(f => !ql || f.filename.toLowerCase().includes(ql)).slice(0, 600);
+    filePick.innerHTML = list.length ? list.map(f => `
+      <label class="row" style="gap:.5rem;padding:.12rem 0;cursor:pointer">
+        <input type="checkbox" data-f="${esc(f.filename)}" ${picked.has(f.filename) ? 'checked' : ''}>
+        <span class="mono" style="font-size:.74rem">${esc(f.filename)}</span>
+        <span class="badge ${f.label === 'FALL' ? 'warn' : 'muted'}" style="margin-left:auto">${esc(f.label)}</span>
+      </label>`).join('') : `<div class="muted-note">no files</div>`;
+    qsa('#file-pick input[type=checkbox]', el).forEach(cb => cb.addEventListener('change', () => {
+      if (cb.checked) picked.add(cb.dataset.f); else picked.delete(cb.dataset.f);
+      updFileCount();
+    }));
+  }
+  async function loadFiles() {
+    filePick.innerHTML = spinner('…');
+    try { filesCache = (await api.datasetFiles(dsEl.value)).files || []; renderFiles(fileSearch.value); }
+    catch (e) { filePick.innerHTML = `<div class="muted-note">${esc(e.message || e)}</div>`; }
+  }
+  scopeEl.addEventListener('change', () => {
+    const pick = scopeEl.value === 'pick';
+    filePick.style.display = pick ? 'block' : 'none';
+    fileSearch.style.display = pick ? 'block' : 'none';
+    if (pick && !filesCache.length) loadFiles();
+    updFileCount();
+  });
+  dsEl.addEventListener('change', () => { picked.clear(); filesCache = []; if (scopeEl.value === 'pick') loadFiles(); updFileCount(); });
+  fileSearch.addEventListener('input', () => renderFiles(fileSearch.value));
+
   qs('#start', el).addEventListener('click', async () => {
     if (!sel.size) { toast('Select at least one detector', 'err'); return; }
+    if (scopeEl.value === 'pick' && !picked.size) { toast('Pick at least one clip (or switch scope to whole dataset)', 'err'); return; }
     const dataset = qs('#ds', el).value;
+    const selectedFiles = scopeEl.value === 'pick' ? [...picked] : null;
     const btn = qs('#start', el); btn.disabled = true; btn.textContent = '…';
     try {
       const r = await api.startEval({
-        dataset, detectors: [...sel], selected_files: null,
+        dataset, detectors: [...sel], selected_files: selectedFiles,
         verdict_config: { min_fall_frames: 1, min_fall_percentage: 0.0 }, sync: false,
       });
       invalidate();
