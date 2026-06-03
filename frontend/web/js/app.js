@@ -3,6 +3,7 @@ import { route, start, onChange, href, parse, setNotFound } from './router.js';
 import { t, lang, setLang, onLang } from './i18n.js';
 import { api } from './api.js';
 import { loadConfig, isPreview } from './config.js';
+import { initTutorial, refreshTutorial } from './tutorial.js';
 import { qs, qsa, esc, healthBadge } from './components.js';
 
 import * as lab from './views/lab.js';
@@ -140,13 +141,13 @@ setNotFound((p) => {
   qs('#brand-seg').textContent = '404';
 });
 
-onChange(() => { renderNav(); if (document.body.classList.contains('drawer-open')) setDrawer(false); });
+onChange(() => { renderNav(); refreshTutorial(); if (document.body.classList.contains('drawer-open')) setDrawer(false); });
 onLang(() => { renderNav(); syncLang(); renderPreviewBadge(); refreshSysbar(); const { path, params } = parse();
   const r = { '/': lab, '/threshold': threshold, '/diversity': diversity, '/files': files,
               '/matrix': matrix, '/evaluate': evaluate, '/eval': evalView, '/detectors': detectors, '/datasets': datasets }[path];
   if (r) bind(r)(params); });
 
 shell();
-(async () => { await loadConfig(); renderPreviewBadge(); start(); })();
+(async () => { await loadConfig(); renderPreviewBadge(); start(); initTutorial(); })();
 refreshSysbar();
 setInterval(refreshSysbar, 15000);

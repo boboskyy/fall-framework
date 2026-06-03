@@ -534,6 +534,21 @@ input[type=range]::-moz-range-thumb {
 .kbd { font-family:var(--mono); font-size:.68rem; border:1px dotted var(--dot);
        padding:.05rem .3rem; color:var(--muted); }
 
+/* tutorial: pulse the current target in amber + a coach bar */
+@keyframes tutPulse {
+  0%   { box-shadow:0 0 0 0 rgba(209,154,102,.6); }
+  70%  { box-shadow:0 0 0 8px rgba(209,154,102,0); }
+  100% { box-shadow:0 0 0 0 rgba(209,154,102,0); }
+}
+.tut-pulse { outline:2px solid var(--warn) !important; outline-offset:2px;
+  animation:tutPulse 1.25s infinite; position:relative; z-index:6; }
+.tut-coach { position:fixed; left:50%; transform:translateX(-50%); bottom:3rem; z-index:55;
+  display:flex; align-items:center; gap:.9rem; background:var(--panel); border:1px dashed var(--warn);
+  padding:.6rem 1rem; font-family:var(--mono); font-size:.8rem; color:var(--text); max-width:92vw; }
+.tut-coach .tstep { color:var(--warn); font-size:.62rem; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap; }
+.tut-coach .tskip { color:var(--muted); cursor:pointer; border-bottom:1px dotted var(--muted); font-size:.72rem; white-space:nowrap; }
+.tut-coach .tskip:hover { color:var(--text); }
+
 footer.foot { color:var(--muted); font-family:var(--mono); font-size:.72rem;
               border-top:1px dotted var(--dot); padding:1.2rem 1.4rem;
               max-width:var(--maxw); margin:0 auto; }
