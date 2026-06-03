@@ -147,7 +147,7 @@ export async function render(root, params) {
         ${stripedBar(pctv / 100, { best: s.status === 'completed' })}
         <div class="live-rows">${rowsHtml}</div>
         <div class="btn-row">
-          ${['completed', 'partial'].includes(s.status) ? `<a class="btn sm" href="${href('/', { ds: dataset })}">${esc(t('view'))} ${esc(t('ranking'))} →</a>` : ''}
+          ${['completed', 'partial'].includes(s.status) ? `<a class="btn sm" href="${href('/eval', { id: evalId })}">${esc(t('view'))} →</a> <a class="btn ghost sm" href="${href('/', { ds: dataset })}">${esc(t('ranking'))} →</a>` : ''}
           ${['pending', 'running'].includes(s.status) ? `<button class="btn sm danger" id="cancel">${esc(t('cancel'))}</button>` : ''}
         </div>
       </div>`;
@@ -167,7 +167,7 @@ export async function render(root, params) {
       const evals = (await getEvals(true)).slice().reverse();
       h.innerHTML = `<div class="panel">` + evals.slice(0, 12).map(e => {
         const cls = e.status === 'completed' ? 'ok' : e.status === 'failed' ? 'bad' : e.status === 'partial' ? 'warn' : 'muted';
-        return `<a class="hist-row" href="${href('/', { ds: e.dataset_name })}">
+        return `<a class="hist-row" href="${href('/eval', { id: e.eval_id })}">
           <div class="nm">${esc(dsLabel(e.dataset_name))}<span class="det">${esc(e.detector_names.map(shortName).join(', '))}</span></div>
           <div><span class="badge ${cls}"><span class="dotled"></span>${esc(e.status)}</span></div>
           <div class="meta">${e.completed_tasks}/${e.total_tasks} · ${ago(e.created_at)}</div>

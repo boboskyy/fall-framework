@@ -10,6 +10,7 @@ import * as diversity from './views/diversity.js';
 import * as files from './views/files.js';
 import * as matrix from './views/matrix.js';
 import * as evaluate from './views/evaluate.js';
+import * as evalView from './views/eval.js';
 import * as detectors from './views/detectors.js';
 import * as datasets from './views/datasets.js';
 import * as system from './views/system.js';
@@ -102,7 +103,7 @@ async function refreshSysbar() {
 }
 
 const SEG = { '/': 'lab', '/threshold': 'threshold', '/diversity': 'diversity', '/files': 'clips',
-              '/matrix': 'matrix', '/evaluate': 'evaluate', '/detectors': 'detectors', '/datasets': 'datasets' };
+              '/matrix': 'matrix', '/evaluate': 'evaluate', '/eval': 'eval', '/detectors': 'detectors', '/datasets': 'datasets' };
 
 function bind(view) {
   return (params) => {
@@ -121,6 +122,7 @@ route('/diversity', bind(diversity));
 route('/files', bind(files));
 route('/matrix', bind(matrix));
 route('/evaluate', bind(evaluate));
+route('/eval', bind(evalView));
 route('/detectors', bind(detectors));
 route('/datasets', bind(datasets));
 setNotFound((p) => {
@@ -131,7 +133,7 @@ setNotFound((p) => {
 onChange(() => { renderNav(); if (document.body.classList.contains('drawer-open')) setDrawer(false); });
 onLang(() => { renderNav(); syncLang(); refreshSysbar(); const { path, params } = parse();
   const r = { '/': lab, '/threshold': threshold, '/diversity': diversity, '/files': files,
-              '/matrix': matrix, '/evaluate': evaluate, '/detectors': detectors, '/datasets': datasets }[path];
+              '/matrix': matrix, '/evaluate': evaluate, '/eval': evalView, '/detectors': detectors, '/datasets': datasets }[path];
   if (r) bind(r)(params); });
 
 shell();
