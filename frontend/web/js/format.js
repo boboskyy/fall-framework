@@ -1,7 +1,7 @@
 // format.js — detector taxonomy, number formatting, metric math.
 import { lang } from './i18n.js';
 
-/* ----- detector taxonomy (thesis families A–F) ----- */
+/* detector taxonomy (thesis families A–F) */
 export const FAMILY = {
   taufeeque_human_fall: 'A', boboskyy_fall_detect: 'A',
   parichehrvn_tcn_fall: 'B',
@@ -34,7 +34,6 @@ export const ALL_DS = '__all__';   // overall mode: pool all evaluated clips
 export const dsLabel = (n) =>
   n === ALL_DS ? (lang() === 'pl' ? 'wszystkie · overall' : 'all · overall') : (DS_LABEL[n] || n);
 
-/* ----- numbers ----- */
 export function dec(x, p = 3) {
   if (x === null || x === undefined || Number.isNaN(x)) return '–';
   const s = Number(x).toFixed(p);
@@ -63,7 +62,7 @@ export function ago(iso) {
   return Math.round(d / 86400) + 'd';
 }
 
-/* ----- metric math -----
+/* metric math
    A "row" is { tp, tn, fp, fn } from confusion counts.                     */
 export function metricsFromCounts(tp, tn, fp, fn) {
   const labeled = tp + tn + fp + fn;

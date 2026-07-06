@@ -32,7 +32,6 @@ async function req(path, opts = {}) {
 export const api = {
   base: BASE,
   config: () => req('/config'),
-  // health / detectors
   health: () => req('/health'),
   detectors: (refresh = false) => req('/detectors' + (refresh ? '?refresh=true' : '')),
   detector: (n) => req(`/detectors/${n}`),
@@ -46,7 +45,6 @@ export const api = {
   downloadDetector: (n) => req(`/detectors/${n}/download`, { method: 'POST', body: JSON.stringify({}) }),
   templateUrl: (name, category = 'object_detection', input = 'video') =>
     `${BASE}/template?name=${encodeURIComponent(name)}&category=${category}&input_type=${input}`,
-  // datasets
   datasets: () => req('/datasets'),
   refreshRegistry: () => req('/datasets/refresh-registry', { method: 'POST' }),
   downloadDataset: (n) => req(`/datasets/${n}/download`, { method: 'POST' }),
@@ -61,7 +59,6 @@ export const api = {
   },
   dataset: (n) => req(`/datasets/${n}`),
   datasetFiles: (n, perPage = 2000) => req(`/datasets/${n}/files?per_page=${perPage}`),
-  // evaluations
   evaluations: () => req('/evaluations'),
   evalStatus: (id) => req(`/evaluate/${id}/status`),
   evalResults: (id) => req(`/evaluate/${id}/results`),

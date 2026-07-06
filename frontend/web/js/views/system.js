@@ -61,7 +61,6 @@ export async function render(root) {
 
   try {
     const ds = await getDatasets();
-    // /datasets list stats are empty — derive clips + fall/adl from one completed eval per dataset
     const statsByDs = {};   // real stats from per-dataset detail (list endpoint is empty)
     await Promise.all(ds.map(async d => {
       try { statsByDs[d.name] = (await getDatasetDetail(d.name)).statistics || {}; } catch {}
