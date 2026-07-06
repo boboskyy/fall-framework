@@ -1,100 +1,98 @@
-# FallFW - Framework do detekcji upadkow
+# FallFW - framework do porównywania wizyjnych detektorów upadków
 
-Framework mikroserwisowy opakowujacy rozne algorytmy detekcji upadkow jako kontenery Docker z ustandaryzowanym REST API. Umozliwia uruchomienie roznych detektorow na tym samym nagraniu wideo i porownanie ich wynikow.
+Mikroserwisowy framework badawczy: każdy detektor upadków działa jako kontener
+Docker z ujednoliconym REST API, dzięki czemu różne algorytmy można uruchomić na
+tych samych nagraniach i uczciwie porównać - na poziomie klatek, klipów i całych
+zbiorów danych. Projekt powstał na potrzeby pracy magisterskiej o generalizacji
+międzyzbiorowej detekcji upadków (analiza *cross-dataset*).
 
-Autor: Karol Bobowski.
+Autor: Karol Bobowski
 
-## Wymagania
+| Pracownia ewaluacji | Detektory | Zbiory danych |
+|---|---|---|
+| ![Lab](docs/screenshots/lab.png) | ![Detektory](docs/screenshots/detectors.png) | ![Zbiory](docs/screenshots/datasets.png) |
 
-- **Docker** (z Docker Compose)
-- **Git**
-- **Python 3.10+** (tylko dla CLI)
+## Funkcje
 
-## Start
+- ranking detektorów na żywo (F1, recall, FPR, precyzja) na wybranym zbiorze,
+- analiza wrażliwości na próg agregacji `min_fall_frames` (zmiany rankingu),
+- macierz międzyzbiorowa: F1 detektor × zbiór z rangami,
+- miary różnorodności zespołu (kappa Cohena, double-fault, macierz współwystępowania błędów),
+- mapa potencjalnego wycieku danych (train / eval / OOD dla par detektor–zbiór),
+- podgląd klipów z decyzjami klatkowymi i skokiem do klatki,
+- interfejs PL/EN, motyw jasny/ciemny, wbudowany samouczek.
+
+## Szybki start
 
 ```bash
 git clone https://github.com/boboskyy/fall-framework.git
 cd fall-framework
-```
-
-### 1. Uruchomienie frameworka
-
-```bash
 python3 launch.py
 ```
 
-Buduje i uruchamia **Gateway** (port 3000) oraz **Frontend** (port 2999). Otworz http://localhost:2999 w przegladarce.
+Launcher buduje i uruchamia **Gateway** (port 3000) oraz **Frontend**
+(port 2999) - otwórz http://localhost:2999.
 
-### 2. Instalacja CLI (opcjonalnie)
-
-```bash
-pip install click requests rich simple-term-menu
-```
-
-### 3. Tryb interaktywny
-
-CLI posiada tryb interaktywny z nawigacja strzalkami - wystarczy uruchomic bez argumentow:
+Praca z detektorami przez CLI (opcjonalnie `pip install click requests rich simple-term-menu`):
 
 ```bash
-python -m cli
+python -m cli download --all      # pobranie kodu detektorów (GitHub Releases)
+python -m cli build --all         # budowa obrazów Docker
+python -m cli start <nazwa>
+python -m cli detect video.mp4 -d <nazwa> --sync
 ```
 
-### 4. Pobranie repozytoriow detektorow
+Tryb interaktywny: `python -m cli` (nawigacja strzałkami).
 
-```bash
-python -m cli download --all
-```
-
-### 5. Budowanie obrazow Docker
-
-```bash
-python -m cli build --all
-```
-
-### 6. Uruchomienie detektora i detekcja
-
-```bash
-python -m cli start dzungvpham_twostream_cnn
-python -m cli detect video.mp4 -d dzungvpham_twostream_cnn --sync
-```
-
-### 7. Porownanie wielu detektorow
-
-```bash
-python -m cli start --all
-python -m cli compare video.mp4 -d dzungvpham_twostream_cnn,taufeeque_human_fall,cwlroda_openpifpaf,boboskyy_fall_detect
-```
-
-## Detektory
+## Detektory (11, sześć kategorii metod)
 
 | Detektor | Kategoria | Technologia | Oryginalne repozytorium |
 |----------|-----------|-------------|------------------------|
-| dzungvpham_twostream_cnn | Hybrydowy | MobileNetV2 + Motion History Image (TensorFlow/Keras) | [dzungvpham/fall-detection-two-stream-cnn](https://github.com/dzungvpham/fall-detection-two-stream-cnn) |
-| taufeeque_human_fall | Estymacja pozy | OpenPifPaf 0.13.6 + LSTM (PyTorch) | [taufeeque9/HumanFallDetection](https://github.com/taufeeque9/HumanFallDetection) |
-| cwlroda_openpifpaf | Estymacja pozy | OpenPifPaf 0.11.8 + tracker centroidowy (PyTorch) | [cwlroda/falldetection_openpifpaf](https://github.com/cwlroda/falldetection_openpifpaf) |
-| boboskyy_fall_detect | Estymacja pozy | MediaPipe + LSTM (TensorFlow/Keras) | - |
+| boboskyy_fall_detect | A - poza + LSTM | MediaPipe + LSTM | [archiwum](https://github.com/boboskyy/fall-detector-repos) |
+| taufeeque_human_fall | A - poza + LSTM | OpenPifPaf + LSTM | [taufeeque9/HumanFallDetection](https://github.com/taufeeque9/HumanFallDetection) |
+| parichehrvn_tcn_fall | B - poza + TCN | YOLOv11-Pose + TCN | [parichehrvn/fall_detection](https://github.com/parichehrvn/fall_detection) |
+| barkhaaroraa_fall_detection_dl | C - poza + heurystyka | MediaPipe, spadek barków | [barkhaaroraa/health_monitoring_system_DL](https://github.com/barkhaaroraa/health_monitoring_system_DL) |
+| cwlroda_openpifpaf | C - poza + heurystyka | OpenPifPaf + tracker centroidowy | [cwlroda/falldetection_openpifpaf](https://github.com/cwlroda/falldetection_openpifpaf) |
+| itskyledc_yolov12_mediapipe | C - poza + heurystyka | YOLOv12 + MediaPipe, reguły | [itSkyyledc/Human-Fall-Detection-Yolov12-Mediapipe](https://github.com/itSkyyledc/Human-Fall-Detection-Yolov12-Mediapipe) |
+| yb_class_fall | C - poza + heurystyka | YOLOv7-w6-pose, biomechanika | [Y-B-Class-Projects/Human-Fall-Detection](https://github.com/Y-B-Class-Projects/Human-Fall-Detection) |
+| noorkhokhar_yolov8_fall | D - detekcja obiektów | YOLOv8, klasa „upadek" | [noorkhokhar99/Fall_Detection_Using_Yolov8](https://github.com/noorkhokhar99/Fall_Detection_Using_Yolov8) |
+| tonlongthuat_fall_detection | D - detekcja obiektów | YOLOv8-pose, klasa „fall" | [tonlongthuat/Real-Time-Fall-Detection](https://github.com/tonlongthuat/Real-Time-Fall-Detection) |
+| dzungvpham_twostream_cnn | E - dwustrumieniowy | MobileNetV2 + Motion History Image | [dzungvpham/fall-detection-two-stream-cnn](https://github.com/dzungvpham/fall-detection-two-stream-cnn) |
+| gajuuzz_stgcn | F - graf szkieletu (GCN) | AlphaPose/SPPE + ST-GCN (TSSTG) | [GajuuzZ/Human-Falling-Detect-Tracks](https://github.com/GajuuzZ/Human-Falling-Detect-Tracks) |
 
-## Porty
+Kod detektorów pobierany jest jako spakowane archiwa z
+[boboskyy/fall-detector-repos](https://github.com/boboskyy/fall-detector-repos)
+(GitHub Releases); wagi modeli - zgodnie z README danego detektora.
 
-| Serwis | Port |
-|--------|------|
-| Frontend | 2999 |
-| Gateway API | 3000 |
-| dzungvpham_twostream_cnn | 3001 |
-| taufeeque_human_fall | 3002 |
-| cwlroda_openpifpaf | 3003 |
-| boboskyy_fall_detect | 3004 |
+## Zbiory danych
+
+| Zbiór | Źródło |
+|-------|--------|
+| URFD (UR Fall Detection) | [fenix.ur.edu.pl/~mkepski/ds/uf.html](http://fenix.ur.edu.pl/~mkepski/ds/uf.html) |
+| GMDCSA-24 | [ekramalam/GMDCSA24…](https://github.com/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos) |
+| CAUCAFall | [Mendeley Data, doi:10.17632/7w7fccy7ky.5](https://doi.org/10.17632/7w7fccy7ky.5) |
+| MCFD (Multiple Cameras Fall) | [iro.umontreal.ca/~labimage/Dataset](https://www.iro.umontreal.ca/~labimage/Dataset/) |
+
+Przygotowane paczki klipów (z etykietami na poziomie klipu) framework pobiera z
+GitHub Releases (`datasets-v1`); można też dodać **własny zbiór** - wystarczy
+katalog z klipami wgrany przez UI (zakładka Zbiory) lub API gatewaya.
+
+## Własny detektor
+
+Nowy detektor to katalog w `detectors/` wg szablonu `detectors/_template`:
+`manifest.json` (metadane, port), `detector.py` (adapter dziedziczący po
+`BaseDetector`), `app.py`, `Dockerfile`, `requirements.txt`. Po dodaniu jest
+widoczny w CLI i w UI jak pozostałe.
 
 ## Struktura projektu
 
 ```
 fall-framework/
-├── core/           Biblioteka wspoldzielona (modele, klasa bazowa, fabryka Flask)
-├── gateway/        Brama REST API + orkiestracja (port 3000)
-├── cli/            Interfejs wiersza polecen (Click)
-├── detectors/      Katalog detektorow + szablon
-├── frontend/       Frontend Next.js (oddzielny build)
-├── shared/         Wspoldzielony wolumin Docker (uploady, stan)
-├── launch.py       Launcher
-└── docker-compose.yml
+├── core/           biblioteka współdzielona (modele, BaseDetector, fabryka Flask)
+├── gateway/        REST API + orkiestracja i statystyki ewaluacji (port 3000)
+├── frontend/       statyczny SPA (vanilla JS) serwowany przez nginx (port 2999)
+├── cli/            interfejs wiersza poleceń (Click)
+├── detectors/      adaptery detektorów + szablon _template
+├── shared/         wolumin współdzielony (uploady, wyniki, stan)
+└── launch.py       launcher (build + up)
 ```
