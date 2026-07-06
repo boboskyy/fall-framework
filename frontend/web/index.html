@@ -8,6 +8,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  /* Apply the saved theme before first paint to avoid a flash. Default = dark
+     (we ignore prefers-color-scheme on purpose). Mirrored by js/theme.js. */
+  (function () {
+    try {
+      var t = localStorage.getItem('fallfw-theme');
+      document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
 <link rel="stylesheet" href="./css/theme.css">
 </head>
 <body>

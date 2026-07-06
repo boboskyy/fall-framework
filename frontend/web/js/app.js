@@ -1,6 +1,7 @@
 // app.js — shell, navigation, language, system drawer, routing.
 import { route, start, onChange, href, parse, setNotFound } from './router.js';
 import { t, lang, setLang, onLang } from './i18n.js';
+import { theme, setTheme } from './theme.js';
 import { api } from './api.js';
 import { loadConfig, isPreview } from './config.js';
 import { initTutorial, refreshTutorial } from './tutorial.js';
@@ -34,13 +35,16 @@ function shell() {
       <nav class="nav" id="nav"></nav>
       <div class="topbar-right">
         <span id="preview-badge"></span>
+        <div class="lang" id="theme" aria-label="theme">
+          <button data-th="dark" title="dark theme">☾&nbsp;DARK</button><span class="sep">/</span><button data-th="light" title="light theme">☼&nbsp;LIGHT</button>
+        </div>
         <div class="lang" id="lang">
           <button data-l="pl">PL</button><span class="sep">/</span><button data-l="en">EN</button>
         </div>
       </div>
     </header>
     <main class="main" id="app-main"></main>
-    <footer class="foot">// FallFW gateway · Flask REST · ${esc(api.base)} — research console</footer>
+    <footer class="foot">Fall FW - Karol Bobowski</footer>
     <div class="sysbar" id="sysbar" role="button" tabindex="0" aria-expanded="false" aria-controls="drawer" aria-label="system panel">
       <span id="sys-summary">${esc(t('system'))}: …</span>
       <span class="grow"></span>
@@ -51,6 +55,8 @@ function shell() {
   renderNav();
   qsa('#lang button').forEach(b => b.addEventListener('click', () => setLang(b.dataset.l)));
   syncLang();
+  qsa('#theme button').forEach(b => b.addEventListener('click', () => { setTheme(b.dataset.th); syncTheme(); }));
+  syncTheme();
 
   const sysbar = qs('#sysbar');
   sysbar.addEventListener('click', toggleDrawer);
@@ -80,6 +86,7 @@ function renderNav() {
     `<a href="${href(n.path)}" class="${n.path === cur ? 'active' : ''}">${esc(t(n.key))}</a>`).join('');
 }
 function syncLang() { qsa('#lang button').forEach(b => b.classList.toggle('active', b.dataset.l === lang())); }
+function syncTheme() { qsa('#theme button').forEach(b => b.classList.toggle('active', b.dataset.th === theme())); }
 function renderPreviewBadge() {
   const el = qs('#preview-badge');
   if (el) el.innerHTML = isPreview() ? `<span class="badge warn"><span class="dotled"></span>${esc(t('preview'))}</span>` : '';

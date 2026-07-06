@@ -2,6 +2,7 @@
 // aggregate stats). ?name= shows one detector's detail.
 import { api } from '../api.js';
 import { shortName, family, FAMILY_LABEL, dsLabel, dec, pct, ms } from '../format.js';
+import { trainingLabel } from '../leakage.js';
 import { qs, qsa, esc, spinner, empty, healthBadge, toast } from '../components.js';
 import { stripedBar } from '../charts.js';
 import { isPreview } from '../config.js';
@@ -131,6 +132,8 @@ async function detail(root, name) {
       <p class="desc">${esc(inf.description || '')}</p>
       <div class="metabar">
         <span class="badge info"><span class="fam" style="width:1rem;height:1rem;font-size:.58rem;border:none">${family(name)}</span>${esc(FAMILY_LABEL[family(name)] || '')}</span>
+        ${(() => { const tl = trainingLabel(name); const txt = tl.startsWith('@') ? t(tl.slice(1)) : tl;
+          return `<span class="badge warn" title="${esc(t('prov_trained_on'))}">${esc(t('prov_trained_on'))}: ${esc(txt)}</span>`; })()}
         ${inf.category ? `<span class="badge muted">${esc(inf.category)}</span>` : ''}
         <span class="badge muted">${esc((inf.supported_input_types || []).join(', ') || 'video')}</span>
         <span class="badge ${inf.requires_gpu ? 'info' : 'muted'}">${inf.requires_gpu ? 'GPU' : 'CPU'}${inf.device ? ' · ' + esc(inf.device) : ''}</span>

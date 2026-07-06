@@ -6,6 +6,7 @@ import { stripedBar } from '../charts.js';
 import { qs, qsa, spinner, empty, esc } from '../components.js';
 import { t } from '../i18n.js';
 import { href, go } from '../router.js';
+import { leakCategory, CAT } from '../leakage.js';
 
 const rankGlyph = (i) => roman(i);
 let _monitorStop = null;   // live running-tasks poller (one at a time)
@@ -151,10 +152,13 @@ export async function render(root, params) {
   const maxF1 = Math.max(...lb.rows.map(r => r.f1));
   const rowsHtml = lb.rows.map((r, i) => {
     const isBest = i === 0;
+    const cat = ctx.ds !== ALL_DS ? leakCategory(r.name, ctx.ds) : 'ood';
+    const leakBadge = cat !== 'ood'
+      ? `<span class="leak-badge ${CAT[cat].cls}" title="${esc(t(CAT[cat].tip))}">${esc(CAT[cat].short)}</span>` : '';
     return `<a class="lb-row ${isBest ? 'best' : ''}" href="${href('/files', { ds: ctx.ds, det: r.name })}">
       <div class="rank r${i + 1}">${rankGlyph(i + 1)}</div>
       <div class="lb-name" title="${esc(r.name)} · ${esc(FAMILY_LABEL[r.family] || '')}">
-        <span class="fam">${r.family}</span><span class="nm">${esc(r.short)}</span>
+        <span class="fam">${r.family}</span><span class="nm">${esc(r.short)}</span>${leakBadge}
         ${r.partial ? '<span class="badge warn" style="margin-left:.4rem">partial</span>' : ''}
       </div>
       ${stripedBar(r.f1, { max: 1, best: isBest })}
