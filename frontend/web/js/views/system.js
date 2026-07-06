@@ -1,0 +1,82 @@
+// views/system.js — infra, demoted into the bottom drawer.
+import { api } from '../api.js';
+import { getDatasets, getDatasetDetail } from '../store.js';
+import { shortName, family, dsLabel } from '../format.js';
+import { qs, qsa, esc, spinner, healthBadge, toast } from '../components.js';
+import { isPreview } from '../config.js';
+import { resetTutorial } from '../tutorial.js';
+import { t } from '../i18n.js';
+
+export async function render(root) {
+  root.innerHTML = `<div class="row between" style="margin-bottom:1rem">
+      <span class="sec-h" style="margin:0">${esc(t('system_h'))}</span>
+      <button class="btn ghost sm" id="tut-reset">↻ ${esc(t('tut_restart'))}</button>
+    </div>
+    <div id="sys-grid">${spinner('…')}</div>
+    <h2 class="sec-h mt2">${esc(t('datasets_h'))}<span class="rule"></span></h2>
+    <div id="sys-ds" class="grid auto"></div>`;
+  qs('#tut-reset', root).addEventListener('click', resetTutorial);
+
+  async function loadDetectors() {
+    const grid = qs('#sys-grid', root);
+    try {
+      const d = await api.detectors(true);
+      const dets = (d.detectors || []).sort((a, b) => family(a.name).localeCompare(family(b.name)));
+      grid.innerHTML = `<div class="grid auto">` + dets.map(x => `
+        <div class="panel" data-det="${esc(x.name)}">
+          <div class="row between">
+            <div class="row" style="gap:.5rem">
+              <span class="fam">${family(x.name)}</span>
+              <strong class="mono">${esc(shortName(x.name))}</strong>
+            </div>
+            ${healthBadge(x.container_status)}
+          </div>
+          <div class="metabar" style="margin-top:.5rem">
+            ${x.category ? `<span class="badge muted">${esc(x.category)}</span>` : ''}
+            <span class="badge muted">:${x.port}</span>
+            <span class="badge ${x.requires_gpu ? 'info' : 'muted'}">${x.requires_gpu ? 'GPU' : 'CPU'}${x.device && x.device.toLowerCase() !== (x.requires_gpu ? 'gpu' : 'cpu') ? ' · ' + esc(x.device) : ''}</span>
+          </div>
+          ${isPreview() ? '' : `<div class="btn-row mt">
+            <button class="btn sm" data-act="start">${esc(t('start_c'))}</button>
+            <button class="btn sm ghost" data-act="stop">${esc(t('stop_c'))}</button>
+            <button class="btn sm ghost" data-act="build">${esc(t('build_c'))}</button>
+          </div>`}
+        </div>`).join('') + `</div>`;
+
+      qsa('[data-act]', grid).forEach(b => b.addEventListener('click', async () => {
+        const name = b.closest('[data-det]').dataset.det;
+        const act = b.dataset.act;
+        b.disabled = true; b.textContent = '…';
+        try {
+          if (act === 'start') await api.startDetector(name);
+          if (act === 'stop') await api.stopDetector(name);
+          if (act === 'build') await api.buildDetector(name);
+          toast(`${shortName(name)}: ${act} ok`, 'ok');
+        } catch (e) { toast(`${shortName(name)}: ${e.message || e}`, 'err'); }
+        loadDetectors();
+      }));
+    } catch (e) { grid.innerHTML = `<div class="empty">${esc(e.message || e)}</div>`; }
+  }
+  loadDetectors();
+
+  try {
+    const ds = await getDatasets();
+    // /datasets list stats are empty — derive clips + fall/adl from one completed eval per dataset
+    const statsByDs = {};   // real stats from per-dataset detail (list endpoint is empty)
+    await Promise.all(ds.map(async d => {
+      try { statsByDs[d.name] = (await getDatasetDetail(d.name)).statistics || {}; } catch {}
+    }));
+    qs('#sys-ds', root).innerHTML = ds.map(d => {
+      const st = statsByDs[d.name] || d.statistics || {};
+      const total = st.total_files ?? '?', fall = st.total_fall ?? '?', adl = st.total_adl ?? '?';
+      return `<div class="panel">
+        <strong class="mono">${esc(dsLabel(d.name))}</strong>
+        <div class="metabar" style="margin-top:.5rem">
+          <span class="badge muted">${total} clips</span>
+          <span class="badge warn">${fall} fall</span>
+          <span class="badge muted">${adl} adl</span>
+          <span class="badge muted">${esc(d.input_type || '')}</span>
+        </div></div>`;
+    }).join('') || '<div class="empty">no datasets</div>';
+  } catch {}
+}

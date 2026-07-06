@@ -169,10 +169,14 @@ class TonlongthuatFallDetectionDetector(BaseDetector):
                     self._person_last_timestamp[person_id] = timestamp_sec
 
                     accumulated_fall_time = self._person_fall_times[person_id]
-                    fall_detected = accumulated_fall_time >= fall_threshold
+                    # Wiernosc oryginalowi: oznacz upadek NATYCHMIAST gdy model widzi klase 'fall'
+                    # (upstream: `if class_name == 'fall'`). Bramka 3s zaniżała sygnał i gubiła krótkie
+                    # upadki (0% na URFD). Agregacje czasowa zostawiamy wspolnemu progowi frameworka
+                    # (min_fall_frames) — spojnie z pozostalymi detektorami emitujacymi stan per-klatka.
+                    fall_detected = is_fall
 
                     fall_state = FallState.FALL_DETECTED if fall_detected else FallState.NO_FALL
-                    fall_confidence = min(1.0, accumulated_fall_time / fall_threshold) if fall_threshold > 0 else 0.0
+                    fall_confidence = conf if is_fall else 0.0
 
                     keypoints: List[Keypoint] = []
                     if hasattr(results[0], 'keypoints') and results[0].keypoints is not None:

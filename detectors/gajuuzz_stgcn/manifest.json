@@ -1,0 +1,80 @@
+{
+    "$schema": "detector-manifest-v1",
+    "name": "gajuuzz_stgcn",
+    "display_name": "AlphaPose + ST-GCN Fall Detection (GajuuzZ)",
+    "version": "1.0.0",
+    "description": "Skeleton-based fall detection (graph convolutional family). Tiny-YOLOv3 one-class person detection -> SPPE FastPose (AlphaPose) 2D skeleton -> SORT-style tracker with a 30-frame buffer -> ST-GCN (TSSTG) 7-class action recognition. A frame is a fall when a confirmed track's action == 'Fall Down'. Fills the GCN architecture family that the literature review covers but no other detector represents.",
+    "github_url": "https://github.com/GajuuzZ/Human-Falling-Detect-Tracks",
+    "repository": "https://github.com/GajuuzZ/Human-Falling-Detect-Tracks",
+    "category": "pose_estimation",
+    "tags": [
+        "ST-GCN",
+        "AlphaPose",
+        "Graph Convolutional",
+        "TinyYOLOv3",
+        "Tracking"
+    ],
+    "supported_input_types": [
+        "video"
+    ],
+    "multi_person": true,
+    "requires_gpu": false,
+    "port": 3011,
+    "internal_port": 5000,
+    "docker_service_name": "gajuuzz-stgcn",
+    "docker": {
+        "context": "../..",
+        "dockerfile": "detectors/gajuuzz_stgcn/Dockerfile"
+    },
+    "model_info": {
+        "architecture": "TinyYOLOv3-onecls (person) + SPPE FastPose ResNet50 (AlphaPose skeleton) + ST-GCN / TSSTG (7-class action recognition)",
+        "framework": "PyTorch",
+        "weights_file": "repo/Models/TSSTG/tsstg-model.pth",
+        "training_dataset": "COCO (pose backbone); ST-GCN action model trained on Le2i + custom 7-action skeleton set"
+    },
+    "outputs": {
+        "provides_keypoints": true,
+        "keypoint_format": "coco_17",
+        "provides_bounding_box": true,
+        "bbox_format": "xyxy_absolute",
+        "provides_activity_label": true,
+        "activity_labels": [
+            "pending",
+            "Standing",
+            "Walking",
+            "Sitting",
+            "Lying Down",
+            "Stand up",
+            "Sit down",
+            "Fall Down"
+        ],
+        "provides_tracking_id": true,
+        "tracker": "sort-kalman"
+    },
+    "config_schema": {
+        "frame_skip": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 30,
+            "description": "Process every Nth frame (1 = every frame). Note: ST-GCN needs 30 consecutive processed frames per track before it can classify."
+        },
+        "inp_dets": {
+            "type": "integer",
+            "default": 384,
+            "min": 256,
+            "max": 608,
+            "description": "Tiny-YOLO input resolution for person detection"
+        },
+        "pose_backbone": {
+            "type": "string",
+            "default": "resnet50",
+            "description": "SPPE FastPose backbone (resnet50 or resnet101)"
+        }
+    },
+    "gpu_support": {
+        "capable": true,
+        "notes": "Three stacked models (Tiny-YOLO + FastPose ResNet50 + ST-GCN) per frame. GPU strongly recommended; CPU works but is slow (expect minutes per clip)."
+    },
+    "startup_time_seconds": 40
+}

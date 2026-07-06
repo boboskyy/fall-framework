@@ -145,6 +145,24 @@ class EvaluationFileResult:
         data['detector_verdict'] = 'FALL' if self.detector_verdict else 'ADL'
         return data
 
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'EvaluationFileResult':
+        dv = d.get('detector_verdict')
+        return cls(
+            filename=d['filename'],
+            ground_truth_label=d.get('ground_truth_label', 'UNLABELED'),
+            ground_truth_fall=d.get('ground_truth_fall'),
+            detector_verdict=(dv is True or dv == 'FALL'),
+            detector_confidence=d.get('detector_confidence'),
+            detector_fall_frame_count=d.get('detector_fall_frame_count', 0),
+            detector_total_frames=d.get('detector_total_frames', 0),
+            detector_fall_percentage=d.get('detector_fall_percentage', 0.0),
+            match=d.get('match'),
+            classification=d.get('classification'),
+            processing_time_ms=d.get('processing_time_ms', 0),
+            frame_level_metrics=d.get('frame_level_metrics'),
+        )
+
 
 @dataclass
 class EvaluationDetectorSummary:
@@ -170,6 +188,28 @@ class EvaluationDetectorSummary:
     def to_dict(self) -> Dict:
         data = asdict(self)
         return data
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'EvaluationDetectorSummary':
+        return cls(
+            detector_name=d['detector_name'],
+            total_files=d.get('total_files', 0),
+            true_positives=d.get('true_positives', 0),
+            true_negatives=d.get('true_negatives', 0),
+            false_positives=d.get('false_positives', 0),
+            false_negatives=d.get('false_negatives', 0),
+            accuracy=d.get('accuracy', 0.0),
+            precision=d.get('precision', 0.0),
+            recall=d.get('recall', 0.0),
+            f1_score=d.get('f1_score', 0.0),
+            avg_processing_time_ms=d.get('avg_processing_time_ms', 0.0),
+            total_processing_time_ms=d.get('total_processing_time_ms', 0),
+            avg_frame_precision=d.get('avg_frame_precision'),
+            avg_frame_recall=d.get('avg_frame_recall'),
+            avg_frame_f1=d.get('avg_frame_f1'),
+            avg_temporal_iou=d.get('avg_temporal_iou'),
+            per_file_results=[EvaluationFileResult.from_dict(x) for x in d.get('per_file_results', [])],
+        )
 
 
 @dataclass
@@ -234,6 +274,29 @@ class EvaluationJob:
             'completed_at': self.completed_at,
         }
 
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'EvaluationJob':
+        job = cls(
+            eval_id=d['eval_id'],
+            dataset_name=d['dataset_name'],
+            detector_names=d.get('detector_names', []),
+            selected_files=d.get('selected_files'),
+            config=d.get('config'),
+            verdict_config=d.get('verdict_config', {'min_fall_frames': 1, 'min_fall_percentage': 0.0}),
+            status=d.get('status', 'completed'),
+            total_tasks=d.get('total_tasks', 0),
+            completed_tasks=d.get('completed_tasks', 0),
+            failed_tasks=d.get('failed_tasks', 0),
+            cancelled=d.get('cancelled', False),
+            created_at=d.get('created_at') or datetime.utcnow().isoformat(),
+            started_at=d.get('started_at'),
+            completed_at=d.get('completed_at'),
+            error=d.get('error'),
+        )
+        if d.get('result'):
+            job.result = EvaluationResult.from_dict(d['result'])
+        return job
+
 
 @dataclass
 class EvaluationResult:
@@ -271,6 +334,25 @@ class EvaluationResult:
             'status': self.status,
         }
         return data
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'EvaluationResult':
+        return cls(
+            eval_id=d['eval_id'],
+            dataset_name=d['dataset_name'],
+            ground_truth_type=d.get('ground_truth_type', 'video_level'),
+            total_files_evaluated=d.get('total_files_evaluated', 0),
+            total_files_in_dataset=d.get('total_files_in_dataset', 0),
+            selected_files=d.get('selected_files'),
+            verdict_config=d.get('verdict_config', {}),
+            detector_summaries=[EvaluationDetectorSummary.from_dict(x) for x in d.get('detector_summaries', [])],
+            cross_detector_agreement=d.get('cross_detector_agreement'),
+            overall_statistics=d.get('overall_statistics'),
+            created_at=d.get('created_at') or datetime.utcnow().isoformat(),
+            completed_at=d.get('completed_at'),
+            total_wall_time_seconds=d.get('total_wall_time_seconds'),
+            status=d.get('status', 'completed'),
+        )
 
 
 @dataclass

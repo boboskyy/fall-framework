@@ -1,17 +1,28 @@
 
 import csv
+import hashlib
 import io
+import json
+import os
 import threading
 import time
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import requests
+
 from gateway.dataset_models import (
     DatasetFile, DatasetManifest, EvaluationFileResult,
     EvaluationDetectorSummary, EvaluationJob, EvaluationResult,
 )
 from gateway.dataset_manager import DatasetManager
+
+
+# Circuit breaker: if a detector fails this many clips in a row, stop sending it
+# more clips. Prevents one wedged/hung container (e.g. a detector that locks up
+# on a specific clip) from stalling an entire evaluation for hours.
+EVAL_MAX_CONSECUTIVE_FAILURES = 3
 
 
 def compute_video_verdict(detection_result: dict,
@@ -60,6 +71,11 @@ class EvaluationManager:
         self.orchestrator = orchestrator
         self.comparison_engine = comparison_engine
         self._evaluations: Dict[str, EvaluationJob] = {}
+        # Persist completed evaluations to disk (bind-mounted /shared) so the
+        # in-memory store survives container restarts, and historical results
+        # can be imported. Loaded on startup.
+        self._persist_dir = os.environ.get('FALLFW_EVAL_PERSIST_DIR', '/shared/_evaluations')
+        self._load_persisted()
 
     def create_evaluation(self, dataset_name: str,
                           detector_names: List[str],
@@ -142,6 +158,19 @@ class EvaluationManager:
                 'message': 'Evaluation started',
             }
 
+    def _detector_healthy(self, detector_name: str, timeout: float = 5.0) -> bool:
+        """Quick liveness probe. A single-threaded detector wedged on one clip
+        cannot answer /health, so this distinguishes a transient clip error from
+        a hung container."""
+        detector = self.orchestrator.registry.get_detector(detector_name)
+        if not detector:
+            return False
+        url = f'http://{detector.docker_service_name}:{detector.internal_port}/health'
+        try:
+            return requests.get(url, timeout=timeout).status_code == 200
+        except Exception:
+            return False
+
     def _run_evaluation(self, job: EvaluationJob, manifest: DatasetManifest,
                         eval_files: List[DatasetFile]):
         start_time = time.time()
@@ -164,23 +193,39 @@ class EvaluationManager:
         detector_file_results: Dict[str, List[EvaluationFileResult]] = {
             d: [] for d in job.detector_names
         }
+        consecutive_failures: Dict[str, int] = {d: 0 for d in job.detector_names}
+        wedged_detectors: set = set()
 
         for df in eval_files:
             if job.cancelled:
                 break
+
+            # Detectors tripped by the circuit breaker: record their remaining
+            # clips as failed immediately, with no network call (no waiting).
+            for det in job.detector_names:
+                if det in wedged_detectors:
+                    job.sub_tasks[f'{df.filename}::{det}'] = {
+                        'status': 'failed',
+                        'error': 'Detector wedged - remaining clips skipped',
+                    }
+                    job.failed_tasks += 1
+
+            active_detectors = [d for d in job.detector_names if d not in wedged_detectors]
+            if not active_detectors:
+                continue
 
             input_path = f'{shared_base}/{df.filename}'
 
             result = self.orchestrator.submit_multi(
                 input_path=input_path,
                 input_type=manifest.input_type,
-                detector_names=job.detector_names,
+                detector_names=active_detectors,
                 config=job.config,
                 sync=True,
             )
 
             if 'error' in result:
-                for det in job.detector_names:
+                for det in active_detectors:
                     task_key = f'{df.filename}::{det}'
                     job.sub_tasks[task_key] = {
                         'status': 'failed',
@@ -193,7 +238,7 @@ class EvaluationManager:
             if not orch_job:
                 continue
 
-            for det in job.detector_names:
+            for det in active_detectors:
                 task_key = f'{df.filename}::{det}'
                 sub = orch_job.sub_tasks.get(det)
 
@@ -203,6 +248,15 @@ class EvaluationManager:
                         'error': sub.error if sub else 'No result',
                     }
                     job.failed_tasks += 1
+                    consecutive_failures[det] += 1
+                    # Trip the breaker if the container is wedged (can't answer
+                    # /health) or keeps failing clip after clip. Stops one bad
+                    # clip from stalling the whole eval for hours.
+                    if det not in wedged_detectors and (
+                        not self._detector_healthy(det)
+                        or consecutive_failures[det] >= EVAL_MAX_CONSECUTIVE_FAILURES
+                    ):
+                        wedged_detectors.add(det)
                     continue
 
                 file_result = self._compute_file_result(
@@ -213,6 +267,7 @@ class EvaluationManager:
 
                 job.sub_tasks[task_key] = {'status': 'completed'}
                 job.completed_tasks += 1
+                consecutive_failures[det] = 0
 
         # Compute summaries
         detector_summaries = []
@@ -267,6 +322,8 @@ class EvaluationManager:
             job.status = 'failed'
         else:
             job.status = 'partial'
+
+        self._save(job)   # persist so it survives restarts
 
         # Cleanup copied files
         self.dataset_manager.cleanup_evaluation(job.eval_id)
@@ -532,6 +589,184 @@ class EvaluationManager:
 
     def list_evaluations(self) -> List[Dict]:
         return [job.get_summary() for job in self._evaluations.values()]
+
+    # --- persistence (survives restarts) -------------------------------------
+    def _load_persisted(self):
+        try:
+            if not os.path.isdir(self._persist_dir):
+                return
+            for fn in sorted(os.listdir(self._persist_dir)):
+                if not fn.endswith('.json'):
+                    continue
+                try:
+                    with open(os.path.join(self._persist_dir, fn), encoding='utf-8') as f:
+                        job = EvaluationJob.from_dict(json.load(f))
+                    self._evaluations[job.eval_id] = job
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    def _save(self, job: EvaluationJob):
+        try:
+            os.makedirs(self._persist_dir, exist_ok=True)
+            tmp = os.path.join(self._persist_dir, f'.{job.eval_id}.tmp')
+            final = os.path.join(self._persist_dir, f'{job.eval_id}.json')
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(job.to_dict(), f)
+            os.replace(tmp, final)
+        except Exception:
+            pass
+
+    # --- import a completed evaluation from per-clip rows (CSV export format)
+    # Rebuilds the result 1:1 using the same summary code as a real run, so the
+    # gateway/UI cannot tell it apart from a live evaluation.
+    def import_evaluation(self, dataset_name: str, detector_name: str, rows: List[Dict],
+                          verdict_config: Optional[Dict] = None, eval_id: Optional[str] = None,
+                          created_at: Optional[str] = None, completed_at: Optional[str] = None) -> Dict:
+        eval_id = eval_id or 'eval-imp-' + hashlib.md5(
+            f'{dataset_name}|{detector_name}'.encode()).hexdigest()[:8]
+        vc = {
+            'min_fall_frames': (verdict_config or {}).get('min_fall_frames', 1),
+            'min_fall_percentage': (verdict_config or {}).get('min_fall_percentage', 0.0),
+        }
+
+        def _num(v, default=0):
+            try:
+                return type(default)(float(v))
+            except (TypeError, ValueError):
+                return default
+
+        file_results = []
+        for r in rows:
+            gt_label = r.get('ground_truth') or r.get('ground_truth_label') or 'UNLABELED'
+            gt_fall = True if gt_label == 'FALL' else (False if gt_label == 'ADL' else None)
+            ff = _num(r.get('fall_frames', r.get('detector_fall_frame_count')), 0)
+            tot = _num(r.get('total_frames', r.get('detector_total_frames')), 0)
+            conf = r.get('confidence', r.get('detector_confidence'))
+            conf = float(conf) if conf not in (None, '', 'None') else None
+            # Derive the verdict from fall_frames at the configured threshold —
+            # the same rule a real run uses — NOT the CSV's verdict column, which
+            # may have been written at an inconsistent threshold (e.g. event-type
+            # detectors collapse). This keeps imports 1:1 with a live evaluation.
+            fall_pct = (ff / tot) if tot else 0.0
+            verdict = (ff >= vc['min_fall_frames']) and (fall_pct >= vc['min_fall_percentage'])
+            match = (gt_fall == verdict) if gt_fall is not None else None
+            cls = None
+            if gt_fall is not None:
+                cls = ('TP' if (gt_fall and verdict) else 'TN' if (not gt_fall and not verdict)
+                       else 'FP' if (not gt_fall and verdict) else 'FN')
+            file_results.append(EvaluationFileResult(
+                filename=r.get('filename', ''), ground_truth_label=gt_label,
+                ground_truth_fall=gt_fall, detector_verdict=verdict, detector_confidence=conf,
+                detector_fall_frame_count=ff, detector_total_frames=tot,
+                detector_fall_percentage=round(ff / tot, 4) if tot else 0.0,
+                match=match, classification=cls,
+                processing_time_ms=_num(r.get('processing_time_ms'), 0),
+            ))
+
+        summary = self._compute_detector_summary(detector_name, file_results)
+        overall = self._compute_overall_statistics([summary])
+        manifest = self.dataset_manager._datasets.get(dataset_name)
+        gtt = manifest.ground_truth_type if manifest else 'video_level'
+        total_in = len(manifest.files) if manifest else len(file_results)
+        partial = total_in > len(file_results)
+        status = 'partial' if partial else 'completed'
+        now = datetime.utcnow().isoformat()
+        created_at = created_at or now
+        completed_at = completed_at or now
+
+        result = EvaluationResult(
+            eval_id=eval_id, dataset_name=dataset_name, ground_truth_type=gtt,
+            total_files_evaluated=len(file_results), total_files_in_dataset=total_in,
+            selected_files=[fr.filename for fr in file_results], verdict_config=vc,
+            detector_summaries=[summary], cross_detector_agreement=None,
+            overall_statistics=overall, created_at=created_at, completed_at=completed_at,
+            total_wall_time_seconds=None, status=status,
+        )
+        job = EvaluationJob(
+            eval_id=eval_id, dataset_name=dataset_name, detector_names=[detector_name],
+            selected_files=result.selected_files, config=None, verdict_config=vc,
+            status=status, total_tasks=(total_in if partial else len(file_results)),
+            completed_tasks=len(file_results),
+            failed_tasks=(total_in - len(file_results)) if partial else 0,
+            created_at=created_at, completed_at=completed_at,
+        )
+        job.result = result
+        self._evaluations[eval_id] = job
+        self._save(job)
+        return {'eval_id': eval_id, 'dataset': dataset_name, 'detector': detector_name,
+                'clips': len(file_results), 'status': status, 'f1': summary.f1_score}
+
+    # --- live progress (per-detector) + SSE stream ---------------------------
+    # NOTE: powers the redesigned UI's live cockpit. New endpoints — they take
+    # effect only after the gateway is redeployed; the UI falls back to /status
+    # polling until then.
+    def get_evaluation_progress(self, eval_id: str) -> Optional[Dict]:
+        job = self._evaluations.get(eval_id)
+        if not job:
+            return None
+        n_det = len(job.detector_names) or 1
+        per_file = (job.total_tasks // n_det) if n_det else 0
+        per = {
+            d: {'completed': 0, 'failed': 0, 'total': per_file,
+                'running': False, 'status': 'queued'}
+            for d in job.detector_names
+        }
+        for key, st in job.sub_tasks.items():
+            parts = key.split('::')
+            det = parts[1] if len(parts) > 1 else None
+            if det in per:
+                s = (st or {}).get('status')
+                if s == 'completed':
+                    per[det]['completed'] += 1
+                elif s == 'failed':
+                    per[det]['failed'] += 1
+        finished = job.status in ('completed', 'partial', 'failed', 'cancelled')
+        for p in per.values():
+            done = p['completed'] + p['failed']
+            if finished:
+                p['status'] = ('done' if p['failed'] == 0
+                               else 'failed' if p['completed'] == 0 else 'partial')
+            elif p['total'] and done >= p['total']:
+                p['status'] = 'done'
+            elif done > 0:
+                p['status'] = 'running'
+                p['running'] = True
+            else:
+                p['status'] = 'queued'
+        summary = job.get_summary()
+        summary['per_detector'] = per
+        return summary
+
+    def stream_evaluation(self, eval_id: str):
+        """Return a generator yielding Server-Sent Events of progress until the
+        evaluation finishes. None if the evaluation does not exist."""
+        if eval_id not in self._evaluations:
+            return None
+
+        def gen():
+            last = None
+            ticks = 0
+            terminal = ('completed', 'partial', 'failed', 'cancelled')
+            while True:
+                prog = self.get_evaluation_progress(eval_id)
+                if prog is None:
+                    yield f'event: error\ndata: {json.dumps({"error": "NOT_FOUND"})}\n\n'
+                    return
+                payload = json.dumps(prog)
+                if payload != last:
+                    yield f'data: {payload}\n\n'
+                    last = payload
+                elif ticks % 10 == 0:
+                    yield ': ka\n\n'   # heartbeat keeps the channel warm through long unchanged stretches
+                if prog.get('status') in terminal:
+                    yield f'event: done\ndata: {payload}\n\n'
+                    return
+                ticks += 1
+                time.sleep(0.6)
+
+        return gen
 
     def cancel_evaluation(self, eval_id: str) -> Dict:
         job = self._evaluations.get(eval_id)

@@ -1,0 +1,12 @@
+flask==3.0.*
+werkzeug==3.0.*
+opencv-python-headless>=4.5.0
+numpy>=1.19.0
+scipy>=1.7.0
+tqdm>=4.0.0
+Pillow>=8.0.0
+matplotlib>=3.3.0
+# torch/torchvision installed separately in Dockerfile (CPU index by default)
+# Upstream repo (GajuuzZ) also uses: Track/ (own SORT+Kalman), DetectorLoader
+# (Darknet TinyYOLO), PoseEstimateLoader (SPPE FastPose). If build fails on a
+# missing import, add the package here.

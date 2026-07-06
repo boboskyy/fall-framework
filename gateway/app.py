@@ -18,8 +18,27 @@ from gateway.evaluation_manager import EvaluationManager
 
 
 def create_gateway_app():
+    import os
     app = Flask(__name__)
     CORS(app)
+
+    # Preview / read-only mode (for public VPS hosting): keep all browsing +
+    # results, but block anything that runs detectors or mutates state
+    # (detection, evaluation, rerun, build, download, upload, start/stop...).
+    # Toggle with env FALLFW_PREVIEW=1. No rebuild needed to flip it.
+    PREVIEW = os.environ.get('FALLFW_PREVIEW', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+
+    @app.before_request
+    def _preview_guard():
+        if PREVIEW and request.method not in ('GET', 'HEAD', 'OPTIONS'):
+            return jsonify({
+                'error': 'PREVIEW_MODE',
+                'message': 'Read-only preview: detection, evaluation, rerun and container actions are disabled.',
+            }), 403
+
+    @app.route('/api/v1/config', methods=['GET'])
+    def get_config():
+        return jsonify({'preview': PREVIEW, 'version': '2.0.0'})
 
     registry = DetectorRegistry()
     registry.scan_manifests()
@@ -1000,6 +1019,38 @@ def create_gateway_app():
             }), 404
         return jsonify(status)
 
+    @app.route('/api/v1/evaluate/<eval_id>/progress', methods=['GET'])
+    def get_evaluation_progress(eval_id):
+        # Per-detector live progress for the redesigned UI cockpit.
+        prog = evaluation_manager.get_evaluation_progress(eval_id)
+        if not prog:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Evaluation "{eval_id}" not found',
+            }), 404
+        return jsonify(prog)
+
+    @app.route('/api/v1/evaluate/<eval_id>/stream', methods=['GET'])
+    def stream_evaluation(eval_id):
+        # Server-Sent Events live channel. One-way server→client progress push;
+        # the frontend falls back to /status + /progress polling if absent.
+        from flask import Response, stream_with_context
+        gen = evaluation_manager.stream_evaluation(eval_id)
+        if gen is None:
+            return jsonify({
+                'error': 'NOT_FOUND',
+                'message': f'Evaluation "{eval_id}" not found',
+            }), 404
+        return Response(
+            stream_with_context(gen()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',
+                'Connection': 'keep-alive',
+            },
+        )
+
     @app.route('/api/v1/evaluate/<eval_id>/cancel', methods=['POST'])
     def cancel_evaluation(eval_id):
         result = evaluation_manager.cancel_evaluation(eval_id)
@@ -1044,6 +1095,29 @@ def create_gateway_app():
             'evaluations': evaluations,
             'count': len(evaluations),
         })
+
+    @app.route('/api/v1/evaluate/import', methods=['POST'])
+    def import_evaluation():
+        # Rebuild a completed evaluation 1:1 from exported per-clip rows
+        # (filename, ground_truth, verdict, classification, confidence,
+        #  fall_frames, total_frames, processing_time_ms). Persists to disk.
+        data = request.get_json(silent=True)
+        if not data or not data.get('dataset') or not data.get('detector') \
+                or not isinstance(data.get('rows'), list):
+            return jsonify({
+                'error': 'INVALID_REQUEST',
+                'message': 'Required: dataset, detector, rows (array of per-clip rows)',
+            }), 400
+        result = evaluation_manager.import_evaluation(
+            dataset_name=data['dataset'],
+            detector_name=data['detector'],
+            rows=data['rows'],
+            verdict_config=data.get('verdict_config'),
+            eval_id=data.get('eval_id'),
+            created_at=data.get('created_at'),
+            completed_at=data.get('completed_at'),
+        )
+        return jsonify(result), 201
 
 
     @app.route('/', methods=['GET'])
