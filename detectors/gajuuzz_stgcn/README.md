@@ -1,34 +1,34 @@
 # gajuuzz_stgcn - ST-GCN (AlphaPose + TSSTG)
 
-Adapter detektora upadków z repozytorium [GajuuzZ/Human-Falling-Detect-Tracks](https://github.com/GajuuzZ/Human-Falling-Detect-Tracks).
+Adapter for the fall detector from [GajuuzZ/Human-Falling-Detect-Tracks](https://github.com/GajuuzZ/Human-Falling-Detect-Tracks).
 
-Pipeline: Tiny-YOLO (detekcja osoby) → SPPE FastPose (poza 2D) → tracker SORT
-(bufor 30 klatek) → ST-GCN/TSSTG (klasyfikacja akcji). Klatka jest oznaczana jako
-upadek, gdy akcja śledzonego obiektu to `Fall Down`; agregacja czasowa odbywa się
-wspólnym progiem frameworka (`min_fall_frames`).
+Pipeline: Tiny-YOLO (person detection) → SPPE FastPose (2D pose) → SORT tracker
+(30-frame buffer) → ST-GCN/TSSTG (action classification). A frame is marked as a
+fall when the tracked object's action is `Fall Down`; temporal aggregation is
+handled by the framework-wide `min_fall_frames` threshold.
 
-## Przygotowanie (przed buildem)
+## Prerequisites (before build)
 
-Upstream i wagi nie są wersjonowane w tym repozytorium - katalog `repo/` trzeba
-wypełnić lokalnie:
+The upstream repo and model weights are not versioned here - populate the
+`repo/` directory locally:
 
 ```bash
 cd detectors/gajuuzz_stgcn
 git clone https://github.com/GajuuzZ/Human-Falling-Detect-Tracks repo
 ```
 
-Następnie pobierz wagi do `repo/Models/` (linki Google Drive w README upstreamu):
-Tiny-YOLO one-class, SPPE FastPose (ResNet50) oraz `tsstg-model.pth` (ST-GCN).
-Ścieżki są zaszyte w `DetectorLoader.py` / `PoseEstimateLoader.py` /
-`ActionsEstLoader.py` upstreamu.
+Then download the weights into `repo/Models/` (Google Drive links in the
+upstream README): Tiny-YOLO one-class, SPPE FastPose (ResNet50) and
+`tsstg-model.pth` (ST-GCN). The paths are hard-coded in the upstream
+`DetectorLoader.py` / `PoseEstimateLoader.py` / `ActionsEstLoader.py`.
 
-## Build i uruchomienie
+## Build and run
 
 ```bash
-fallfw build gajuuzz_stgcn     # build z GPU: DEVICE=gpu
+fallfw build gajuuzz_stgcn     # GPU build: DEVICE=gpu
 fallfw start gajuuzz_stgcn
 fallfw detect video.mp4 -d gajuuzz_stgcn --sync
 ```
 
-Uwaga: klasyfikator działa na oknie ~30 klatek na śledzony obiekt - bardzo
-krótkie klipy (< 30 klatek) nie dadzą decyzji.
+Note: the classifier operates on a ~30-frame window per tracked object - very
+short clips (< 30 frames) will not produce a decision.
